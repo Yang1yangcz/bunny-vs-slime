@@ -76,15 +76,25 @@
     min-height:100vh;display:flex;flex-direction:column;gap:10px;
   }
 
+  /* 标题：黑体，居中压在战场正上方 */
   .title{
-    margin:0;text-align:center;font-size:clamp(30px,3.6vw,50px);font-weight:900;
-    letter-spacing:.06em;color:var(--ink);
-    text-shadow:0 2px 0 rgba(255,255,255,.75);
-    line-height:1.1;
+    margin:0 auto;text-align:center;line-height:1.04;
+    font-family:"Heiti SC","SimHei",STHeiti,"Microsoft YaHei",ui-sans-serif,sans-serif;
+    font-size:clamp(34px,4vw,58px);font-weight:900;letter-spacing:.08em;
+    padding:2px 0 6px;
   }
+  .title span{
+    /* 白色硬描边，浅底/照片底都能压住 */
+    text-shadow:
+      3px 3px 0 #fff, -3px 3px 0 #fff, 3px -3px 0 #fff, -3px -3px 0 #fff,
+      0 3px 0 #fff, 0 -3px 0 #fff, 3px 0 0 #fff, -3px 0 0 #fff,
+      0 7px 14px rgba(10,42,63,.28);
+  }
+  .title .t-a{color:#e2452a}
+  .title .t-b{color:#1c9448}
   .title em{
-    font-style:normal;font-size:.58em;font-weight:800;color:var(--ink-soft);
-    margin:0 .42em;letter-spacing:.02em;
+    font-style:normal;font-size:.46em;font-weight:900;color:#5b7d92;
+    margin:0 .34em;letter-spacing:0;vertical-align:.16em;
   }
 
   /* 用 flex 让左右 HUD 紧贴画框，而不是被网格撑到大屏两端 */
@@ -128,41 +138,58 @@
   }
   .stat{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);padding:5px 14px 0;font-variant-numeric:tabular-nums}
 
-    .skills{padding:8px 8px 9px;display:flex;flex-direction:column;gap:9px;flex:1;justify-content:center}
-  /* 展开详情时：技能卡贴顶，详情占满剩余高度并可滚动 */
-  .card.detail-on .skills{flex:0 0 auto;justify-content:flex-start}
-  .card.detail-on .detail{display:block;flex:1 1 auto;min-height:0;max-height:none}
+    /* 收起详情时：技能格子平分剩余高度，把侧栏撑满 */
+  .skills{padding:10px;display:flex;flex-direction:column;gap:10px;flex:1}
   .sk{
-    display:grid;grid-template-columns:42px 1fr;gap:9px;align-items:center;
-    border:2px solid rgba(10,42,63,.16);border-radius:9px;padding:6px;background:#f7fcff;
+    flex:1 1 0;min-height:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;
+    border:2px solid rgba(10,42,63,.16);border-radius:11px;padding:14px 12px;background:#f7fcff;
     transition:border-color .12s ease, background .12s ease;
   }
+  /* 展开详情时：技能卡缩成一行一条，详情占满剩余高度 */
+  .card.detail-on .skills{flex:0 0 auto;padding:8px;gap:6px}
+  .card.detail-on .sk{
+    flex:0 0 auto;flex-direction:row;gap:7px;padding:5px 7px;border-radius:8px;align-items:center;
+  }
+  .card.detail-on .sk-main{text-align:left}
+  .card.detail-on .sk-line{justify-content:space-between}
+  .card.detail-on .sk-ico{width:32px;height:32px;flex:none}
+  .card.detail-on .sk-name{font-size:12px}
+  .card.detail-on .sk-line{font-size:10.5px;margin-top:1px}
+  .card.detail-on .sk-bar{height:4px;margin-top:3px}
+  .card.detail-on .sk-sub{display:none}
+  .card.detail-on .detail{display:flex;flex-direction:column;justify-content:space-between;flex:1 1 auto;min-height:0;max-height:none}
   .sk.ready{border-color:rgba(34,160,74,.5);background:#f3fdf6}
   .sk.active{border-color:var(--violet);background:#f8f4ff}
   .sk.lock{border-color:var(--blood);background:#fff4f3}
-  .sk-ico{width:42px;height:42px;display:block}
+  .sk-ico{width:76px;height:76px;display:block;flex:none}
   .sk-ico svg{width:100%;height:100%;display:block}
-  .sk-main{min-width:0}
-  .sk-name{font-size:13.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .sk-line{display:flex;justify-content:space-between;gap:6px;font-size:12px;font-weight:700;color:var(--ink-soft);margin-top:2px;font-variant-numeric:tabular-nums}
+  .sk-main{min-width:0;width:100%;text-align:center}
+  .sk-name{font-size:17px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sk-sub{font-size:12px;font-weight:600;color:var(--ink-soft);line-height:1.45;margin-top:6px;padding:0 2px}
+  .sk-line{display:flex;justify-content:center;gap:14px;font-size:13px;font-weight:700;color:var(--ink-soft);margin-top:8px;font-variant-numeric:tabular-nums}
   .sk.ready .sk-line b{color:#1c8b45}
   .sk.active .sk-line b{color:var(--violet)}
   .sk.lock .sk-line b{color:var(--blood)}
-  .sk-bar{height:6px;border-radius:3px;background:#dce9f1;margin-top:4px;overflow:hidden}
+  .sk-bar{height:10px;border-radius:5px;background:#dce9f1;margin-top:8px;overflow:hidden}
   .sk-bar i{display:block;height:100%;width:100%;background:var(--sky);transition:width .1s linear}
   .sk.ready .sk-bar i{background:#35b45f}
   .sk.active .sk-bar i{background:var(--violet)}
   .sk.lock .sk-bar i{background:var(--blood)}
 
   /* 卡片内的详细数值 */
-  .detail{display:none;padding:8px 9px 10px;overflow:auto;flex:0 1 auto;border-top:2px dashed rgba(10,42,63,.14)}
-  .detail.show{display:block}
+  .detail{
+    display:none;padding:8px 9px 10px;overflow:auto;flex:0 1 auto;
+    border-top:2px dashed rgba(10,42,63,.14);
+  }
+  /* 展开后：行距自动拉开，把整栏铺满 */
+  .detail.show{display:flex;flex-direction:column;justify-content:space-between}
   .detail h3{margin:2px 0 6px;font-size:12px;color:var(--ink-soft);letter-spacing:.06em}
-  .detail .row{grid-template-columns:72px 1fr auto;gap:6px;font-size:11px;padding:2.5px 0}
-  .detail .row .k{font-size:11px}
-  .detail .row .bar2{height:8px;min-width:44px}
-  .detail .row .v{font-size:11.5px}
-  .detail .tag{font-size:10.5px;padding:1px 6px}
+  .detail .row{grid-template-columns:78px 1fr auto;gap:6px;font-size:12px;padding:4px 0}
+  .detail .row .k{font-size:12px}
+  .detail .row .bar2{height:9px;min-width:44px}
+  .detail .row .v{font-size:12px;font-weight:800}
+  .detail .tag{font-size:11px;padding:1px 7px}
 
   /* 控制坞：左下 / 右下角固定 */
   .dock{
@@ -238,7 +265,14 @@
     background:#08202f;
     transition:background .5s ease;
   }
-  body.ice-mode .title{color:#fff;text-shadow:0 3px 0 rgba(0,0,0,.45), 0 0 30px rgba(143,216,255,.6)}
+  body.ice-mode .title span{
+    color:#fff;
+    text-shadow:
+      3px 3px 0 rgba(6,30,46,.85), -3px 3px 0 rgba(6,30,46,.85),
+      3px -3px 0 rgba(6,30,46,.85), -3px -3px 0 rgba(6,30,46,.85),
+      0 0 28px rgba(143,216,255,.75);
+  }
+  body.ice-mode .title em{color:#bfe6ff}
 
   .sound-hint{
     position:absolute;left:50%;bottom:12px;transform:translateX(-50%);
@@ -309,8 +343,12 @@
 
   @media (max-width:1120px){
     .board{flex-direction:column;align-items:stretch}
-    .hud{width:auto;flex-direction:row;flex-wrap:wrap}
-    .card{flex:1 1 300px}
+    /* 窄屏不再锁定侧栏高度，技能格子改成并排两列 */
+    .hud{width:auto;height:auto;flex-direction:row;gap:10px}
+    .card{flex:1 1 300px;height:auto}
+    .skills{flex-direction:row}
+    .sk{flex:1 1 0;min-height:132px}
+    .detail.show{justify-content:flex-start;gap:2px}
     .cols{grid-template-columns:1fr}
     .col+.col{border-left:0;border-top:2px dashed rgba(10,42,63,.18)}
   }
@@ -319,7 +357,7 @@
 <body>
 <div class="ice-bg" id="iceBg"></div>
 <div class="app">
-  <h1 class="title">兔子 <em>vs</em> 史莱姆</h1>
+  <h1 class="title"><span class="t-a">兔子</span><em>vs</em><span class="t-b">史莱姆</span></h1>
 
   <div class="board">
     <aside class="hud" id="hudA"></aside>
@@ -1636,11 +1674,12 @@
   // ==========================================================================
   const fmt = n => Math.round(n).toLocaleString('en-US');
 
-  function skillCard(id, ico, name) {
+  function skillCard(id, ico, name, sub) {
     return '<div class="sk" id="' + id + '">'
       + '<div class="sk-ico">' + ico + '</div>'
       + '<div class="sk-main">'
       + '<div class="sk-name">' + name + '</div>'
+      + '<div class="sk-sub">' + (sub || '') + '</div>'
       + '<div class="sk-line"><b>—</b><span>—</span></div>'
       + '<div class="sk-bar"><i></i></div>'
       + '</div></div>';
@@ -1654,8 +1693,11 @@
       + '<div class="bar" id="barA"><i></i><b>10000</b></div>'
       + '<div class="stat"><span id="hpA">10000</span><span id="dpsA">DPS 0</span></div>'
       + '<div class="skills">'
-      + skillCard('skHammer', ICON.hammer, '巨锤环绕')
-      + skillCard('skUlt', ICON.ice, '冰岛冲击')
+      + skillCard('skHammer', ICON.hammer, '巨锤环绕',
+          fmt(atkDmg(rabbit, CFG.rabbit.dmgAtkRatio)) + ' 伤害 · ' + CFG.rabbit.hammer.period + 's 一圈')
+      + skillCard('skUlt', ICON.ice, '冰岛冲击',
+          fmt(atkDmg(rabbit, CFG.rabbit.ult.dmgAtkRatio)) + ' 伤害 · 回血 '
+          + Math.round(CFG.rabbit.ult.healRatio * 100) + '%')
       + '</div>'
       + '<div class="detail" id="detailA"></div>'
       + '</div>';
@@ -1667,8 +1709,11 @@
       + '<div class="bar" id="barB"><i></i><b>10000</b></div>'
       + '<div class="stat"><span id="hpB">10000</span><span id="dpsB">DPS 0</span></div>'
       + '<div class="skills">'
-      + skillCard('skMoral', ICON.moral, '站在道德制高点')
-      + skillCard('skHistory', ICON.history, '历史的回眸')
+      + skillCard('skMoral', ICON.moral, '站在道德制高点',
+          '浮空 ' + CFG.slime.moral.air + 's · 免疫全部伤害')
+      + skillCard('skHistory', ICON.history, '历史的回眸',
+          '回血 ' + Math.round(CFG.slime.history.healRatio * 100)
+          + '% · 反弹 ' + Math.round(CFG.slime.history.reflectRatio * 100) + '%')
       + '</div>'
       + '<div class="detail" id="detailB"></div>'
       + '</div>';
@@ -1750,33 +1795,45 @@
 
   function updateDetail() {
     const U = CFG.rabbit.ult;
+    const kv = (k, v) => '<div class="row"><span class="k">' + k + '</span><span>' + v
+      + '</span><span class="v"></span></div>';
+    const dpsOf = f => fmt(clock > 0.5 ? f.dealt / clock : 0);
+
     document.getElementById('detailA').innerHTML =
-      '<h3>兔子</h3>'
+      '<h3>兔子 · 实时数据</h3>'
       + rowBar('生命', rabbit.hp / rabbit.maxHp, fmt(rabbit.hp) + ' / ' + fmt(rabbit.maxHp))
       + rowBar('锤击（本次）', rabbitDamage() / rabbit.maxHp, fmt(rabbitDamage()))
-      + '<div class="row"><span class="k">状态</span><span>' + tagOf(rabbit) + '</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">输出 / 承伤</span><span>' + fmt(rabbit.dealt) + ' / ' + fmt(rabbit.taken) + '</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">命中</span><span>' + rabbit.hits + ' 次</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">速度</span><span>' + Math.round(rabbit.sp) + ' px/s</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">坐标</span><span>' + Math.round(rabbit.x) + ', ' + Math.round(rabbit.y) + '</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">大招次数</span><span>剩 ' + R.ultLeft + ' / ' + U.uses + ' 次</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">下次回血</span><span>' + fmt(Math.round(rabbit.dealt * U.healRatio)) + '</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">累计回血</span><span>' + fmt(rabbit.healed) + '</span><span class="v"></span></div>'
-      + rowBar('最近 10s 承伤', takenBetween(rabbit, 0, 10) / rabbit.maxHp, fmt(takenBetween(rabbit, 0, 10)));
+      + kv('基础攻击', fmt(rabbit.atk))
+      + kv('锤击公式', Math.round(CFG.rabbit.dmgAtkRatio * 100) + '% × 攻击')
+      + kv('状态', tagOf(rabbit))
+      + kv('输出 / 承伤', fmt(rabbit.dealt) + ' / ' + fmt(rabbit.taken))
+      + kv('命中次数', rabbit.hits + ' 次')
+      + kv('平均 DPS', dpsOf(rabbit))
+      + kv('大招次数', '剩 ' + R.ultLeft + ' / ' + U.uses + ' 次')
+      + kv('已释放', R.ultCount + ' 次')
+      + kv('下次回血', fmt(Math.round(rabbit.dealt * U.healRatio)))
+      + kv('累计回血', fmt(rabbit.healed))
+      + rowBar('最近 10s 承伤', takenBetween(rabbit, 0, 10) / rabbit.maxHp, fmt(takenBetween(rabbit, 0, 10)))
+      + kv('移动速度', Math.round(rabbit.sp) + ' px/s')
+      + kv('坐标', Math.round(rabbit.x) + ', ' + Math.round(rabbit.y));
 
     document.getElementById('detailB').innerHTML =
-      '<h3>史莱姆</h3>'
+      '<h3>史莱姆 · 实时数据</h3>'
       + rowBar('生命', slime.hp / slime.maxHp, fmt(slime.hp) + ' / ' + fmt(slime.maxHp))
       + rowBar('单球伤害', CFG.slime.spit.dmgAtkRatio, fmt(atkDmg(slime, CFG.slime.spit.dmgAtkRatio)))
-      + '<div class="row"><span class="k">状态</span><span>' + tagOf(slime) + '</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">输出 / 承伤</span><span>' + fmt(slime.dealt) + ' / ' + fmt(slime.taken) + '</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">吸血回复</span><span>' + fmt(slime.healed) + '</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">场上球</span><span>' + blobs.length + ' 个</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">速度</span><span>' + Math.round(slime.sp) + ' px/s</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">坐标</span><span>' + Math.round(slime.x) + ', ' + Math.round(slime.y) + '</span><span class="v"></span></div>'
+      + kv('基础攻击', fmt(slime.atk))
+      + kv('命中吸血', fmt(atkDmg(slime, CFG.slime.lifestealAtk)) + ' / 次')
+      + kv('状态', tagOf(slime))
+      + kv('输出 / 承伤', fmt(slime.dealt) + ' / ' + fmt(slime.taken))
+      + kv('命中次数', slime.hits + ' 次')
+      + kv('平均 DPS', dpsOf(slime))
+      + kv('场上小球', blobs.length + ' 个')
       + rowBar('最近 10s 承伤', takenBetween(slime, 0, 10) / slime.maxHp, fmt(takenBetween(slime, 0, 10)))
       + rowBar('前 10s 承伤', takenBetween(slime, 10, 20) / slime.maxHp, fmt(takenBetween(slime, 10, 20)))
-      + '<div class="row"><span class="k">上次回溯</span><span>' + (S.lastReflect ? fmt(S.lastReflect) + ' 伤害 / 回血 ' + fmt(S.lastHeal) : '—') + '</span><span class="v"></span></div>';
+      + kv('上次回溯', S.lastReflect
+          ? fmt(S.lastReflect) + ' 伤害 / 回血 ' + fmt(S.lastHeal) : '—')
+      + kv('移动速度', Math.round(slime.sp) + ' px/s')
+      + kv('坐标', Math.round(slime.x) + ', ' + Math.round(slime.y));
   }
 
 
