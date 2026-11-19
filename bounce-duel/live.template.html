@@ -28,10 +28,8 @@
     rabbit.ult.uses             全局可释放次数（3）
     rabbit.ult.dmgAtkRatio      大招总伤害 = 该值 × 基础攻击（1.00 → 3000 ≈ 30% 生命）
     rabbit.ult.ticks / tickGap  持续伤害段数 / 间隔（6 段 × 500，每 0.5s 跳一次）
-    rabbit.ult.cd               释放后的冷却（7 秒）
     rabbit.ult.healRatio        释放瞬间回血 = 该值 × 此前累计造成的伤害（0.30）
-    rabbit.ult.hotRatio         冰岛结束后 3 秒内再回 = 该值 × 最大生命（0.05 → 500）
-    slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力（13500 / 2650，血高 35% 但单发低 12%）
+    slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力（13500 / 3000，比兔子高 35% 用来吃 3 次大招）
     slime.spit.period           几秒喷一组（2.6）
     slime.spit.dmgAtkRatio      单球伤害 = 该值 × 基础攻击（0.85 → 2550 ≈ 25.5% 生命）
     slime.spit.speed            球速（430），越大越准
@@ -433,7 +431,6 @@
       // ---- 破釜沉舟：生命 < 20% 触发，全局只有 3 次 ----
       ult: {
         uses: 3,             // 全局释放上限（用完就不再锁血）
-        cd: 7,               // 释放后的冷却（秒），期间即使掉到 20% 也不会再触发
         hpThreshold: 0.20,   // 触发线：每掉到这个线就触发一次
         lockDur: 2.0,        // 锁血 2 秒（期间不掉血）
         freeze: 3.0,         // 冰冻 3 秒（双方面对面对峙，停止运动）
@@ -442,9 +439,6 @@
         ticks: 6,            // 在持续时间内分 6 段结算（总伤害不变，单段更小）
         tickGap: 0.5,        // 每段间隔 0.5s（6 段 × 0.5s ≈ 覆盖冰冻的 3s）
         healRatio: 0.30,     // 释放瞬间回血 = 30% × 此前累计造成的伤害
-        hotRatio: 0.05,      // 冰岛结束后，3 秒内再持续回复 5% 最大生命
-        hotDur: 3,           // 持续回复时长（秒）
-        hotTicks: 3,         // 分 3 次跳，每次 1 秒
         stun: 1.2
       }
     },
@@ -454,13 +448,13 @@
       // 基础生命比兔子高 35%（13500 / 10000）：兔子多出 3 次冰岛冲击（共 3×3000）
       // 和 3 次锁血，史莱姆只能靠血量和吸血硬吃，这一项是平衡的核心旋钮
       maxHp: 13500,
-      atk: 2650,             // 比兔子低 12%：冷却期间兔子没有锁血，单发不能太重
+      atk: 3000,
       speed: [180, 320],
 
       spit: {
         period: 2.6,         // 每 2.6s 喷一组（兔子有大招后要这个频率才打得动）
         chain: 0.34,         // 两连喷的间隔
-        dmgAtkRatio: 0.85,   // 单球伤害 = 0.85 × 基础攻击 = 2253 ≈ 对方 22.5% 生命
+        dmgAtkRatio: 0.85,   // 单球伤害 = 0.85 × 基础攻击 = 2550 ≈ 对方 25.5% 生命
         speed: 430,
         r: 33, miniR: 23,
         life: 14,
@@ -730,7 +724,7 @@
 
   const R = {
     on: false, t: 0, idle: 1.0, ang: -Math.PI / 2, hitDone: false, tail: 0,
-    ultLeft: CFG.rabbit.ult.uses, ultCount: 0, ultCd: 0, lockT: 0, iceT: 0, freezeT: 0
+    ultLeft: CFG.rabbit.ult.uses, ultCount: 0, lockT: 0, iceT: 0, freezeT: 0
   };
   const S = {
     idle: 2.0, chain: 0, chainT: 0,
@@ -788,7 +782,7 @@
     }
     R.on = false; R.t = 0; R.idle = 1.0; R.ang = -Math.PI / 2; R.hitDone = false; R.tail = 0;
     R.ultLeft = CFG.rabbit.ult.uses; R.ultCount = 0;
-    R.ultCd = 0; R.lockT = 0; R.iceT = 0; R.freezeT = 0;
+    R.lockT = 0; R.iceT = 0; R.freezeT = 0;
 
     S.idle = 2.0; S.chain = 0; S.chainT = 0;
     S.moral.cd = CFG.slime.moral.startCd; S.moral.air = 0; S.moral.readyFor = 0;
@@ -843,9 +837,8 @@
       return 0;
     }
 
-    // 兔子锁血只在「大招就绪」时生效；冷却期间的伤害照常结算，
-    // 否则 7 秒冷却会变成 7 秒无敌（实测会把胜率从 46% 推到 90%+）
-    if (target === rabbit && R.ultLeft > 0 && R.ultCd <= 0) {
+    // 兔子大招：还有次数时，任何伤害都停在 20% 线上（等本帧 castIce 触发）
+    if (target === rabbit && R.ultLeft > 0) {
       const floor = target.maxHp * CFG.rabbit.ult.hpThreshold;
       // 已经压在线上了就完全免伤，否则同一帧的第二下会直接打穿这条线
       amount = target.hp > floor ? Math.min(amount, target.hp - floor) : 0;
@@ -911,7 +904,6 @@
 
     R.ultLeft = Math.max(0, R.ultLeft - 1);
     R.ultCount += 1;
-    R.ultCd = U.cd;
     R.lockT = U.lockDur;
     rabbit.invuln = U.lockDur;
     R.iceT = U.iceDur;
@@ -937,30 +929,6 @@
     } else {
       showBanner('冰岛冲击');
       say('冰岛冲击！', true);
-    }
-
-    // 冰岛结束后 3 秒的持续回复（总 5% 最大生命，分 hotTicks 次跳完）
-    {
-      const pool = Math.round(rabbit.maxHp * U.hotRatio);
-      const n = U.hotTicks;
-      const base = Math.floor(pool / n);
-      const gap = U.hotDur / n;
-      for (let i = 0; i < n; i++) {
-        const amt = i < n - 1 ? base : pool - base * (n - 1);   // 余数补在最后一跳
-        pending.push({
-          at: clock + U.iceDur + gap * (i + 1), gen,
-          fn: () => {
-            if (over) return;
-            const got = heal(rabbit, amt, '#7bd88f');
-            if (got > 0) {
-              fx.rings.push({
-                x: rabbit.x, y: rabbit.y, t: 0, dur: 0.5,
-                r0: 30, r1: 96, color: '#7bd88f', w: 2.4
-              });
-            }
-          }
-        });
-      }
     }
 
     rabbit.face = slime.x > rabbit.x ? 1 : -1;
@@ -1013,8 +981,7 @@
   function updateRabbit(dt) {
     if (rabbit.hp <= 0) return;
 
-    if (R.ultCd > 0) R.ultCd = Math.max(0, R.ultCd - dt);
-    if (R.ultLeft > 0 && R.ultCd <= 0 && rabbit.hp <= rabbit.maxHp * CFG.rabbit.ult.hpThreshold) castIce();
+    if (R.ultLeft > 0 && rabbit.hp <= rabbit.maxHp * CFG.rabbit.ult.hpThreshold) castIce();
 
     if (R.lockT > 0) {
       R.lockT = Math.max(0, R.lockT - dt);
@@ -1815,8 +1782,6 @@
       setSkill('skUlt', 'lock', '锁血中', R.lockT.toFixed(1) + 's', R.lockT / CFG.rabbit.ult.lockDur);
     } else if (R.iceT > 0) {
       setSkill('skUlt', 'active', '冰岛展开', R.iceT.toFixed(1) + 's', R.iceT / CFG.rabbit.ult.iceDur);
-    } else if (R.ultCd > 0) {
-      setSkill('skUlt', '', '冷却', R.ultCd.toFixed(1) + 's', 1 - R.ultCd / CFG.rabbit.ult.cd);
     } else {
       const need = clamp((rabbit.hp / rabbit.maxHp - CFG.rabbit.ult.hpThreshold) / (1 - CFG.rabbit.ult.hpThreshold), 0, 1);
       setSkill('skUlt', 'ready', '待触发', ultTag, need);
@@ -1869,9 +1834,8 @@
       + kv('命中次数', rabbit.hits + ' 次')
       + kv('平均 DPS', dpsOf(rabbit))
       + kv('大招次数', '剩 ' + R.ultLeft + ' / ' + U.uses + ' 次')
-      + kv('大招冷却', R.ultCd > 0 ? R.ultCd.toFixed(1) + 's' : '就绪')
-      + kv('下次回血', fmt(Math.round(rabbit.dealt * U.healRatio)) + ' + '
-          + fmt(Math.round(rabbit.maxHp * U.hotRatio)))
+      + kv('已释放', R.ultCount + ' 次')
+      + kv('下次回血', fmt(Math.round(rabbit.dealt * U.healRatio)))
       + kv('累计回血', fmt(rabbit.healed))
       + rowBar('最近 10s 承伤', takenBetween(rabbit, 0, 10) / rabbit.maxHp, fmt(takenBetween(rabbit, 0, 10)))
       + kv('移动速度', Math.round(rabbit.sp) + ' px/s')
