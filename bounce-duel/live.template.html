@@ -69,7 +69,7 @@
     overflow-x:hidden;
   }
   .app{
-    max-width:1760px;margin:0 auto;padding:16px 26px 26px;
+    max-width:1760px;margin:0 auto;padding:16px 26px 86px;
     min-height:100vh;display:flex;flex-direction:column;gap:10px;
   }
 
@@ -161,7 +161,21 @@
   .detail .row .v{font-size:11.5px}
   .detail .tag{font-size:10.5px;padding:1px 6px}
 
-  .toolbar{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+  /* 控制坞：左下 / 右下角固定 */
+  .dock{
+    position:fixed;bottom:18px;z-index:70;display:flex;gap:10px;align-items:center;
+    padding:8px 10px;border-radius:14px;
+    background:rgba(234,246,253,.86);border:3px solid var(--ink);
+    box-shadow:0 5px 0 rgba(10,42,63,.85);
+    backdrop-filter:blur(6px);
+  }
+  .dock.left{left:20px}
+  .dock.right{right:20px}
+  .dock button{padding:6px 13px;font-size:14px;box-shadow:0 3px 0 var(--ink)}
+  .dock button:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+  body.ice-mode .dock{background:rgba(10,32,48,.8);border-color:#0a2a3f}
+  body.ice-mode .dock button{background:#eaf6fd}
+  body.ice-mode .dock button.on{background:#0a2a3f;color:#fff}
   button{
     font:inherit;font-size:15px;font-weight:900;color:var(--ink);
     background:#fff;border:3px solid var(--ink);border-radius:11px;
@@ -318,9 +332,13 @@
     <aside class="hud" id="hudB"></aside>
   </div>
 
-  <div class="toolbar">
+  <div class="dock left">
     <button id="btnDetail">详细数值</button>
-    <button id="btnVoice">语音播报：开</button>
+  </div>
+
+  <div class="dock right">
+    <button id="btnSfx">音效：开</button>
+    <button id="btnVoice">语音：开</button>
     <button id="btnReset">重新开局</button>
   </div>
 </div>
@@ -474,7 +492,7 @@
   // ==========================================================================
   //  ③  音效（WebAudio 现场合成，无外部文件）
   // ==========================================================================
-  const SFX = { ctx: null, out: null };
+  const SFX = { ctx: null, out: null, muted: false };
 
   function audioInit() {
     if (SFX.ctx) { if (SFX.ctx.state === 'suspended') SFX.ctx.resume(); return; }
@@ -482,7 +500,7 @@
     if (!AC) return;
     SFX.ctx = new AC();
     SFX.out = SFX.ctx.createGain();
-    SFX.out.gain.value = 0.55;
+    SFX.out.gain.value = SFX.muted ? 0 : 0.55;
     const comp = SFX.ctx.createDynamicsCompressor();
     SFX.out.connect(comp).connect(SFX.ctx.destination);
   }
@@ -1793,9 +1811,17 @@
     if (detailOn) updateDetail();
   });
 
+  document.getElementById('btnSfx').addEventListener('click', function () {
+    SFX.muted = !SFX.muted;
+    this.textContent = '音效：' + (SFX.muted ? '关' : '开');
+    this.classList.toggle('on', SFX.muted);
+    if (SFX.out) SFX.out.gain.value = SFX.muted ? 0 : 0.55;
+    if (!SFX.muted) audioInit();
+  });
+
   document.getElementById('btnVoice').addEventListener('click', function () {
     TTS.on = !TTS.on;
-    this.textContent = '语音播报：' + (TTS.on ? '开' : '关');
+    this.textContent = '语音：' + (TTS.on ? '开' : '关');
     this.classList.toggle('on', !TTS.on);
     if (!TTS.on && window.speechSynthesis) window.speechSynthesis.cancel();
   });
