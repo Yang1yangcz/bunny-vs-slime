@@ -1,0 +1,78 @@
+{
+  "title": {
+    "left": "兔子",
+    "right": "史莱姆",
+    "vs": "vs"
+  },
+  "canvas": {
+    "w": 960,
+    "h": 600,
+    "bg": "#0FB6F5",
+    "scale": 1.18,
+    "speed": 215,
+    "maxHp": 1000,
+    "hpBarScale": 1.2
+  },
+  "frame": {
+    "stroke": 7,
+    "strokeColor": "#0a2a3f",
+    "shadow": {
+      "dy": 14,
+      "blur": 28,
+      "alpha": 0.55
+    }
+  },
+  "cast": [
+    {
+      "name": "兔子",
+      "image": "art/a.png",
+      "x": 700,
+      "y": 420,
+      "deg": 148,
+      "maxSide": 140,
+      "accent": "#2f6fe0"
+    },
+    {
+      "name": "史莱姆",
+      "image": "art/b.png",
+      "x": 240,
+      "y": 180,
+      "deg": -34,
+      "maxSide": 152,
+      "accent": "#35c15a"
+    }
+  ],
+  "burst": {
+    "period": 3.4,
+    "dur": 1.7,
+    "spinDeg": 820,
+    "orbitR": 118,
+    "hammerLen": 168,
+    "hitR": 58,
+    "dmg": 171,
+    "stun": 1.3,
+    "labelStun": "眩晕"
+  },
+  "whip": {
+    "period": 5.3,
+    "dmg": 100,
+    "spitSpeed": 380,
+    "spitR": 33,
+    "spitMiniR": 23,
+    "spitLife": 14,
+    "split": 2,
+    "maxBlobs": 8,
+    "labelBreak": "命中",
+    "labelSplit": "分裂",
+    "lifesteal": 0.03
+  },
+  "hud": {
+    "crossSize": 42,
+    "fullColor": "#ffffff",
+    "lowColor": "#ff2f28"
+  },
+  "props": {
+    "cane": "props/hammer.png",
+    "top": ""
+  }
+}

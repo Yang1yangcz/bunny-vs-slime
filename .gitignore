@@ -1,0 +1,24 @@
+# 生成的录制/调试产物
+bounce-duel/_chrome_prof_*/
+bounce-duel/_rec_*.html
+bounce-duel/_tune_prof*/
+bounce-duel/_pick_prof*/
+bounce-duel/_live_prof*/
+bounce-duel/_swp_*/
+bounce-duel/_diag*_prof/
+bounce-duel/shots/
+bounce-duel/duel_stills/
+bounce-duel/check/
+bounce-duel/_probe.html
+bounce-duel/_tune.html
+bounce-duel/_pick.html
+bounce-duel/_chk.js
+
+# 中间帧
+*_frames_*/
+
+# 系统/编辑器
+Thumbs.db
+.DS_Store
+.idea/
+.vscode/

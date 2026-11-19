@@ -1,0 +1,1940 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__ · 回弹对战</title>
+<style>
+  :root{ color-scheme: light; }
+  *{ box-sizing: border-box; }
+  html, body{ height: 100%; margin: 0; }
+  body{
+    background: __BG__;
+    display: flex; align-items: center; justify-content: center;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    overflow: hidden;
+  }
+  .stage{
+    display: flex; flex-direction: column; align-items: center;
+    gap: min(2.6vw, 3.2vh);
+  }
+
+  /* 标题：名字是外部指定的，改字只需要改这一行 */
+  .title{
+    font-weight: 800;
+    font-size: min(4.4vw, 5.4vh);
+    letter-spacing: .01em;
+    color: #061a2b;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .title span{ font-weight: 700; font-size: .62em; color: rgba(6, 26, 43, .74); margin: 0 .22em; }
+
+  /* 画面：不用黑框了，只在外面描一道细边（和参考图一致） */
+  .frame{
+    position: relative;
+    width: min(92vw, 112vh);
+    aspect-ratio: 4 / 3;
+    border-radius: 0;
+    background: __BG__;
+    outline: __STROKE__px solid __STROKE_COLOR__;
+    outline-offset: 0;
+    box-shadow: 0 __SHADOW_DY__px __SHADOW_BLUR__px -4px rgba(6, 26, 43, __SHADOW_ALPHA__);
+    overflow: hidden;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas{ display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="title">__NAME_L__ <span>vs</span> __NAME_R__</div>
+  <div class="frame" id="frame">
+    <canvas id="cv"></canvas>
+  </div>
+</div>
+
+<script>
+(function () {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const frame = document.getElementById('frame');
+
+  // ---------- 基础参数 ----------
+  // ===== 场景配置：由 build.py 从 scene.json 注入，改文案/数值只需要改 scene.json =====
+  const SCENE = __SCENE__;
+
+  const W = SCENE.canvas.w, H = SCENE.canvas.h;
+  const BORDER = SCENE.canvas.border;
+  const TOP_PAD = 0;               // 十字血条不参与碰撞：角色照常贴边，血条超出画面的部分直接裁掉
+  const SPEED = SCENE.canvas.speed;   // 两者统一的初速大小
+  const S = SCENE.canvas.scale;       // 全局尺寸比例：立绘、道具、特效、范围统一缩放
+  const HB = SCENE.canvas.hpBarScale; // 血条在 S 之外再放大的倍数（数值更清楚）
+  const MAX_HP = SCENE.canvas.maxHp;
+  const DEG = Math.PI / 180;
+
+  // 立绘与道具贴图（base64，由 build.py 注入）
+  const IMG_A = "__IMG_A__";
+  const IMG_B = "__IMG_B__";
+  const IMG_CANE = "__IMG_CANE__";
+  const IMG_TOP = "__IMG_TOP__";
+
+  const items = [
+    { key: 'A', name: SCENE.cast[0].name, src: IMG_A, x: SCENE.cast[0].x, y: SCENE.cast[0].y,
+      deg: SCENE.cast[0].deg, maxSide: SCENE.cast[0].maxSide * S, accent: SCENE.cast[0].accent },
+    { key: 'B', name: SCENE.cast[1].name, src: IMG_B, x: SCENE.cast[1].x, y: SCENE.cast[1].y,
+      deg: SCENE.cast[1].deg, maxSide: SCENE.cast[1].maxSide * S, accent: SCENE.cast[1].accent }
+  ];
+  // 左右转身：face = 1 用原图（朝右），-1 水平镜像（朝左）；faceT 用来做一点点转身挤压
+  for (const it of items) {
+    it.face = Math.cos(it.deg * Math.PI / 180) >= 0 ? 1 : -1;
+    it.faceT = 0;
+    it.turn = 0;
+  }
+  const hero = items[0];   // A 位：放范围技 + 突进 + 平A（burst 套件）
+  const foe  = items[1];   // B 位：甩鞭子 + 召唤分裂物（whip 套件）
+
+  // ---------- A 位（兔子）：巨锤绕身旋转 ----------
+  // orbitR 锤心绕角色的半径 / hammerLen 锤子显示长度 / hitR 锤头判定半径
+  const HM = Object.assign({}, SCENE.burst, {
+    orbitR: (SCENE.burst.orbitR || 118) * S,
+    hammerLen: (SCENE.burst.hammerLen || 168) * S,
+    hitR: (SCENE.burst.hitR || 46) * S,
+    spin: (SCENE.burst.spinDeg || 760) * DEG,
+    dur: SCENE.burst.dur || 1.6
+  });
+
+  const skill = {
+    on: false, t: 0, idle: Math.max(0, HM.period - 1.4),
+    ang: -Math.PI / 2, hitDone: false, tail: 0
+  };
+
+  // ---------- B 位（史莱姆）：喷吐小史莱姆球 ----------
+  // 后喷出的球撞到先喷出的球 → 先那颗分裂成两颗；任一颗撞到兔子就消失
+  const SP = Object.assign({}, SCENE.whip, {
+    speed: (SCENE.whip.spitSpeed || 300),
+    r: (SCENE.whip.spitR || 33) * S,
+    miniR: (SCENE.whip.spitMiniR || 24) * S,
+    life: SCENE.whip.spitLife || 7,
+    split: SCENE.whip.split == null ? 2 : SCENE.whip.split
+  });
+
+  // 兼容旧接口：whip 只剩计时与字段占位
+  const whip = {
+    on: false, t: 0, idle: 0.7, pick: 'hero', done: false,
+    tx: 0, ty: 0, dist: 0,
+    chain: 0, chainT: 0            // 连喷：第一颗喷出后隔一小段时间再喷第二颗去撞它
+  };
+  // ---------- 兼容占位：录制接口会读 gyro.ready / gyro.blur，保留一个不参与逻辑的陀螺 ----------
+  const gyro = {
+    x: -999, y: -999, vx: 0, vy: 0, sp: 0,
+    dw: 1, dh: 1, hw: 1, hh: 1, rc: 1,
+    spin: 0, flash: 0, img: new Image(), ready: false, blur: null
+  };
+
+  // ---------- 小史莱姆球（B 位喷出来的） ----------
+  const minis = [];        // {x,y,vx,vy,r,gen,life,age,face}
+
+  let clock = 0;
+  let koFreeze = false;            // 一方倒地 → 画面定格（点击继续）
+
+  // 击杀演出时间轴（单位：秒，真实时间）：先定格打击帧，再慢放看清谁被打飞，最后出 K.O. 牌
+  const KO = {
+    stop: 0.16,      // 命中瞬间的硬定格，先把这一下看清
+    slow: 0.20,      // 定格后的慢放倍率
+    slowEnd: 1.45,   // 慢放结束时刻 → 转入定格
+    banner: 1.15,    // K.O. 牌开始出现的时刻
+    end: 3.4         // 整段演出结束 → 进入静止定格（点击重开）
+  };
+  const ko = {
+    on: false, t: 0, loser: null, winner: null,
+    dirx: 0, diry: -1, flash: 0, hitX: 0, hitY: 0, dmg: 0, cleared: false
+  };
+
+  // ---------- 图片加载 ----------
+  // 锤子贴图已转成"锤头朝右"的横版，旋转角直接等于轨道角
+  const cane = { img: new Image(), dw: HM.hammerLen, dh: HM.hammerLen * 0.68, ready: false };
+
+  cane.img.onload = function () {
+    const s = HM.hammerLen / cane.img.naturalWidth;
+    cane.dw = HM.hammerLen;
+    cane.dh = cane.img.naturalHeight * s;
+    cane.ready = true;
+  };
+  cane.img.src = IMG_CANE;
+
+  // ---------- 陀螺贴图 / 紫陀螺染色 ----------
+  const purpleArt = { c: null, blur: null, ready: false };
+
+  function hueToRgb(p, q, t) {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  }
+
+  // 把红陀螺整体色相旋到紫色，保留高光与暗部
+  function makePurple(src) {
+    const w = Math.min(240, src.naturalWidth);
+    const h = Math.round(src.naturalHeight * w / src.naturalWidth);
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    g.drawImage(src, 0, 0, w, h);
+    let d;
+    try { d = g.getImageData(0, 0, w, h); } catch (e) { return null; }
+    const px = d.data;
+
+    for (let i = 0; i < px.length; i += 4) {
+      if (px[i + 3] < 6) continue;
+      const r = px[i] / 255, gg = px[i + 1] / 255, b = px[i + 2] / 255;
+      const mx = Math.max(r, gg, b), mn = Math.min(r, gg, b);
+      const l = (mx + mn) / 2, dd = mx - mn;
+      let hh = 0, ss = 0;
+      if (dd > 1e-6) {
+        ss = l > 0.5 ? dd / (2 - mx - mn) : dd / (mx + mn);
+        if (mx === r) hh = ((gg - b) / dd + (gg < b ? 6 : 0)) / 6;
+        else if (mx === gg) hh = ((b - r) / dd + 2) / 6;
+        else hh = ((r - gg) / dd + 4) / 6;
+      }
+      hh = (hh + 0.765) % 1;      // 红(0°) → 紫(约 275°)
+      ss = Math.min(1, ss * 1.06);
+      const q = l < 0.5 ? l * (1 + ss) : l + ss - l * ss;
+      const p2 = 2 * l - q;
+      px[i] = hueToRgb(p2, q, hh + 1 / 3) * 255;
+      px[i + 1] = hueToRgb(p2, q, hh) * 255;
+      px[i + 2] = hueToRgb(p2, q, hh - 1 / 3) * 255;
+    }
+
+    g.putImageData(d, 0, 0);
+    return c;
+  }
+
+  // 高速自转的横向运动模糊：把图沿水平方向做多层小偏移叠加，得到一条横向拖影
+  function makeSpinBlur(src, sw, sh) {
+    if (!sw || !sh) return null;
+    const pad = Math.max(2, Math.round(sw * 0.19));   // 左右各留出的拖影宽度
+
+    const c = document.createElement('canvas');
+    c.width = sw + pad * 2;
+    c.height = sh;
+    const g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+
+    const N = 25;
+    for (let i = N; i >= 1; i--) {
+      const u = i / N;
+      const off = pad * Math.pow(u, 0.85);
+
+      // 越靠外的层越淡、越糊，层与层之间才融合得起来
+      g.globalAlpha = 0.10 * (1 - u * 0.55);
+      if ('filter' in g) g.filter = 'blur(' + (0.5 + u * 1.8).toFixed(2) + 'px)';
+
+      g.drawImage(src, pad + off, 0, sw, sh);
+      g.drawImage(src, pad - off, 0, sw, sh);
+    }
+
+    if ('filter' in g) g.filter = 'none';
+    g.globalAlpha = 1;
+    g.drawImage(src, pad, 0, sw, sh);
+
+    return { c: c, w: sw, h: sh, k: c.width / sw };    // k：显示宽度相对原图的倍数
+  }
+
+  // 占位陀螺只负责让 record.py 的 ready() 通过，不参与绘制
+  gyro.img.onload = function () {
+    const iw = gyro.img.naturalWidth;
+    if (!iw) return;
+    gyro.dw = 1; gyro.dh = 1;
+    gyro.hw = 0.5; gyro.hh = 0.5; gyro.rc = 0.5;
+    gyro.ready = true;
+    gyro.blur = makeSpinBlur(gyro.img, Math.min(64, iw), Math.min(64, gyro.img.naturalHeight));
+  };
+  gyro.img.src = IMG_TOP;
+
+  for (const it of items) {
+    const a = it.deg * Math.PI / 180;
+    it.vx = Math.cos(a) * SPEED;
+    it.vy = Math.sin(a) * SPEED;
+    it.dw = it.maxSide; it.dh = it.maxSide;
+    it.hw = it.dw / 2;  it.hh = it.dh / 2;
+    it.rc = (it.hw + it.hh) / 2;
+    it.hp = MAX_HP;
+    it.stun = 0;
+    it.hold = 0;      // 站定（施法者命中后自己也不动）
+    it.svx = it.vx;
+    it.svy = it.vy;
+    it.hitCd = 0;     // 被陀螺撞到后的无敌计时
+    it.dodgeCd = 0;   // 闪避冷却，避免一帧一判刷屏
+    it.dead = 0;
+
+    // 受击反馈
+    it.flash = 0;     // 被击中的白闪
+    it.shake = 0;     // 受击抖动
+    it.squash = 0;    // 受击挤压
+    it.hpShown = MAX_HP;   // 血条掉血残影
+    it.hpHold = 0;         // 残影停留时间
+
+    it.img = new Image();
+  }
+
+  // 把立绘压成纯色剪影，用来做受击白闪
+  function makeSilhouette(src, color) {
+    const w = src.naturalWidth, h = src.naturalHeight;
+    if (!w || !h) return null;
+
+    const s = Math.min(1, 320 / Math.max(w, h));
+    const cw = Math.max(1, Math.round(w * s)), ch = Math.max(1, Math.round(h * s));
+    const c = document.createElement('canvas');
+    c.width = cw; c.height = ch;
+    const g = c.getContext('2d');
+    g.drawImage(src, 0, 0, cw, ch);
+
+    let d;
+    try { d = g.getImageData(0, 0, cw, ch); } catch (e) { return null; }
+    const px = d.data;
+    const cr = parseInt(color.slice(1, 3), 16);
+    const cg = parseInt(color.slice(3, 5), 16);
+    const cb = parseInt(color.slice(5, 7), 16);
+
+    for (let i = 0; i < px.length; i += 4) {
+      const a = px[i + 3];
+      if (a < 8) { px[i + 3] = 0; continue; }
+      px[i] = cr;
+      px[i + 1] = cg;
+      px[i + 2] = cb;
+      px[i + 3] = Math.min(255, a * 2.4);     // 轮廓压实，闪得更实一点
+    }
+
+    g.putImageData(d, 0, 0);
+    return c;
+  }
+
+  function measure(it) {
+    const iw = it.img.naturalWidth, ih = it.img.naturalHeight;
+    if (!iw || !ih) return;
+    const s = it.maxSide / Math.max(iw, ih);
+    it.dw = iw * s;
+    it.dh = ih * s;
+    it.hw = it.dw / 2;
+    it.hh = it.dh / 2;
+    it.rc = (it.hw + it.hh) / 2;
+    it.flashArt = makeSilhouette(it.img, '#ffffff');
+  }
+
+  for (const it of items) {
+    it.img.onload = function () { measure(it); };
+    it.img.src = it.src;
+  }
+
+  // ---------- 画布尺寸 ----------
+  let Wc = 0, Hc = 0, scale = 1;
+
+  function resize() {
+    // 画框比例跟着画布走：改宽场地时 CSS 不用再手改
+    frame.style.aspectRatio = W + ' / ' + H;
+    const fr = frame.getBoundingClientRect();
+    const w = Math.round(fr.width), h = Math.round(fr.height);
+    if (w < 4 || h < 4) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    Wc = Math.round(w * dpr);
+    Hc = Math.round(h * dpr);
+    cv.width = Wc;
+    cv.height = Hc;
+    scale = Wc / W;
+  }
+
+  // ---------- 特效容器 ----------
+  const fx = { nums: [], sparks: [], shock: [], dash: [] };
+
+  function addNum(x, y, text, color, size) {
+    const fs = Math.max(19, Math.round((size || 18) * 1.55));   // 飘字整体放一档半，看得清又不抢画面
+
+    // 附近已经有飘字时按黄金角螺旋错开，避免几个字叠成一坨看不清（竖向压扁，别窜到血条上）
+    let n = 0;
+    for (const o of fx.nums) if (Math.hypot(o.x - x, o.y - y) < 130) n++;
+    if (n > 0) {
+      const a = -Math.PI * 0.5 + n * 2.39996;
+      const r = 42 + n * 26;
+      x += Math.cos(a) * r;
+      y += Math.sin(a) * r * 0.24;
+    }
+
+    fx.nums.push({ x: x, y: y, t: 0, dur: 0.9, text: text, color: color, size: fs });
+  }
+
+  // ---------- 音效（WebAudio 现场合成，不依赖外部音频文件） ----------
+  const SFX = { ctx: null, out: null, lastHit: -9 };
+  const sfxLog = [];                  // 事件时间线：导出视频时用它还原整条音轨
+
+  function getNoise(ctx, dur) {
+    if (ctx.__nb && ctx.__nbDur >= dur) return ctx.__nb;
+    const len = Math.ceil(ctx.sampleRate * dur);
+    const b = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    ctx.__nb = b;
+    ctx.__nbDur = dur;
+    return b;
+  }
+
+  // 受击：低频闷响 + 噪声爆裂 + 一点金属尖音
+  function synthHit(ctx, out, t, vol) {
+    const v = vol == null ? 1 : vol;
+
+    const osc = ctx.createOscillator();
+    const og = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.exponentialRampToValueAtTime(58, t + 0.16);
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.linearRampToValueAtTime(0.55 * v, t + 0.006);
+    og.gain.exponentialRampToValueAtTime(0.0008, t + 0.19);
+    osc.connect(og).connect(out);
+    osc.start(t);
+    osc.stop(t + 0.22);
+
+    const nb = getNoise(ctx, 0.3);
+    const ns = ctx.createBufferSource();
+    ns.buffer = nb;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1400;
+    bp.Q.value = 0.7;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.linearRampToValueAtTime(0.50 * v, t + 0.004);
+    ng.gain.exponentialRampToValueAtTime(0.0008, t + 0.12);
+    ns.connect(bp).connect(ng).connect(out);
+    ns.start(t);
+    ns.stop(t + 0.15);
+
+    const cl = ctx.createOscillator();
+    const cg = ctx.createGain();
+    cl.type = 'triangle';
+    cl.frequency.setValueAtTime(2200, t);
+    cg.gain.setValueAtTime(0.0001, t);
+    cg.gain.linearRampToValueAtTime(0.10 * v, t + 0.002);
+    cg.gain.exponentialRampToValueAtTime(0.0004, t + 0.05);
+    cl.connect(cg).connect(out);
+    cl.start(t);
+    cl.stop(t + 0.07);
+  }
+
+  // 挥鞭：先是一段带通扫频的 whoosh，鞭梢甩到最远时炸一声 crack
+  function synthWhip(ctx, out, t, vol) {
+    const v = vol == null ? 1 : vol;
+    const crack = t + 0.26;
+    const nb = getNoise(ctx, 0.8);
+
+    const ws = ctx.createBufferSource();
+    ws.buffer = nb;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1.4;
+    bp.frequency.setValueAtTime(700, t + 0.06);
+    bp.frequency.exponentialRampToValueAtTime(2800, crack);
+    const wg = ctx.createGain();
+    wg.gain.setValueAtTime(0.0001, t + 0.06);
+    wg.gain.linearRampToValueAtTime(0.30 * v, crack - 0.02);
+    wg.gain.exponentialRampToValueAtTime(0.0006, crack + 0.01);
+    ws.connect(bp).connect(wg).connect(out);
+    ws.start(t + 0.04);
+    ws.stop(crack + 0.05);
+
+    const cs = ctx.createBufferSource();
+    cs.buffer = nb;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 2600;
+    const cg = ctx.createGain();
+    cg.gain.setValueAtTime(0.0001, crack);
+    cg.gain.linearRampToValueAtTime(0.62 * v, crack + 0.003);
+    cg.gain.exponentialRampToValueAtTime(0.0008, crack + 0.10);
+    cs.connect(hp).connect(cg).connect(out);
+    cs.start(crack);
+    cs.stop(crack + 0.13);
+  }
+
+  // 击杀：低频闷炮 + 噪声冲击 + 尾音下沉，比普通受击重得多
+  function synthKO(ctx, out, t, vol) {
+    const v = vol == null ? 1 : vol;
+
+    const o1 = ctx.createOscillator();
+    const g1 = ctx.createGain();
+    o1.type = 'sine';
+    o1.frequency.setValueAtTime(120, t);
+    o1.frequency.exponentialRampToValueAtTime(34, t + 0.55);
+    g1.gain.setValueAtTime(0.0001, t);
+    g1.gain.linearRampToValueAtTime(0.95 * v, t + 0.008);
+    g1.gain.exponentialRampToValueAtTime(0.0006, t + 0.75);
+    o1.connect(g1).connect(out);
+    o1.start(t);
+    o1.stop(t + 0.8);
+
+    const nb = getNoise(ctx, 0.8);
+    const ns = ctx.createBufferSource();
+    ns.buffer = nb;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3800, t);
+    lp.frequency.exponentialRampToValueAtTime(420, t + 0.4);
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.linearRampToValueAtTime(0.72 * v, t + 0.005);
+    ng.gain.exponentialRampToValueAtTime(0.0008, t + 0.5);
+    ns.connect(lp).connect(ng).connect(out);
+    ns.start(t);
+    ns.stop(t + 0.55);
+
+    const o2 = ctx.createOscillator();
+    const g2 = ctx.createGain();
+    o2.type = 'triangle';
+    o2.frequency.setValueAtTime(1560, t);
+    o2.frequency.exponentialRampToValueAtTime(560, t + 0.3);
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.linearRampToValueAtTime(0.16 * v, t + 0.004);
+    g2.gain.exponentialRampToValueAtTime(0.0005, t + 0.34);
+    o2.connect(g2).connect(out);
+    o2.start(t);
+    o2.stop(t + 0.36);
+  }
+
+  // 巨锤起转：低频嗡鸣 + 由低到高的气流声
+  function synthOrbit(ctx, out, t, vol) {
+    const v = vol == null ? 1 : vol;
+    const nb = getNoise(ctx, 0.9);
+
+    const ws = ctx.createBufferSource();
+    ws.buffer = nb;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 2.2;
+    bp.frequency.setValueAtTime(260, t);
+    bp.frequency.exponentialRampToValueAtTime(1900, t + 0.5);
+    const wg = ctx.createGain();
+    wg.gain.setValueAtTime(0.0001, t);
+    wg.gain.linearRampToValueAtTime(0.24 * v, t + 0.28);
+    wg.gain.exponentialRampToValueAtTime(0.0006, t + 0.72);
+    ws.connect(bp).connect(wg).connect(out);
+    ws.start(t);
+    ws.stop(t + 0.75);
+
+    const o = ctx.createOscillator();
+    const og = ctx.createGain();
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 420;
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(74, t);
+    o.frequency.exponentialRampToValueAtTime(126, t + 0.4);
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.linearRampToValueAtTime(0.15 * v, t + 0.06);
+    og.gain.exponentialRampToValueAtTime(0.0005, t + 0.6);
+    o.connect(lp).connect(og).connect(out);
+    o.start(t);
+    o.stop(t + 0.62);
+  }
+
+  // 喷球：短促「啵」
+  function synthSpit(ctx, out, t, vol) {
+    const v = vol == null ? 1 : vol;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(760, t);
+    o.frequency.exponentialRampToValueAtTime(190, t + 0.13);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.30 * v, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0006, t + 0.16);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + 0.18);
+
+    const nb = getNoise(ctx, 0.2);
+    const ns = ctx.createBufferSource();
+    ns.buffer = nb;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 900;
+    bp.Q.value = 3;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.linearRampToValueAtTime(0.10 * v, t + 0.005);
+    ng.gain.exponentialRampToValueAtTime(0.0005, t + 0.08);
+    ns.connect(bp).connect(ng).connect(out);
+    ns.start(t);
+    ns.stop(t + 0.1);
+  }
+
+  // 分裂：两声上扬的泡泡音
+  function synthSplit(ctx, out, t, vol) {
+    const v = vol == null ? 1 : vol;
+    for (let i = 0; i < 2; i++) {
+      const tt = t + i * 0.075;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(420 + i * 90, tt);
+      o.frequency.exponentialRampToValueAtTime(980 + i * 140, tt + 0.11);
+      g.gain.setValueAtTime(0.0001, tt);
+      g.gain.linearRampToValueAtTime(0.20 * v, tt + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0005, tt + 0.13);
+      o.connect(g).connect(out);
+      o.start(tt);
+      o.stop(tt + 0.15);
+    }
+  }
+
+  // 小球命中后消失的「噗」
+  function synthPop(ctx, out, t, vol) {
+    const v = vol == null ? 1 : vol;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(520, t);
+    o.frequency.exponentialRampToValueAtTime(140, t + 0.1);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.18 * v, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0005, t + 0.12);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + 0.14);
+  }
+
+  // 吸血：两声柔和的上升音，像回气
+  function synthHeal(ctx, out, t, vol) {
+    const v = vol == null ? 1 : vol;
+    const notes = [523.25, 783.99];
+    for (let i = 0; i < notes.length; i++) {
+      const tt = t + i * 0.075;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(notes[i], tt);
+      o.frequency.linearRampToValueAtTime(notes[i] * 1.06, tt + 0.14);
+      g.gain.setValueAtTime(0.0001, tt);
+      g.gain.linearRampToValueAtTime(0.17 * v, tt + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0004, tt + 0.22);
+      o.connect(g).connect(out);
+      o.start(tt);
+      o.stop(tt + 0.24);
+    }
+  }
+
+  // 浏览器要求先有用户手势才允许出声
+  function ensureAudio() {
+    if (!SFX.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      SFX.ctx = new AC();
+      SFX.out = SFX.ctx.createGain();
+      SFX.out.gain.value = 0.62;
+      const comp = SFX.ctx.createDynamicsCompressor();
+      SFX.out.connect(comp).connect(SFX.ctx.destination);
+    }
+    if (SFX.ctx.state === 'suspended') SFX.ctx.resume();
+  }
+
+  function playHit(vol) {
+    if (clock - SFX.lastHit < 0.045) return;
+    SFX.lastHit = clock;
+    if (sfxLog.length < 3000) sfxLog.push({ t: clock, type: 'hit', vol: vol });
+    if (SFX.ctx && SFX.ctx.state === 'running') {
+      synthHit(SFX.ctx, SFX.out, SFX.ctx.currentTime, vol);
+    }
+  }
+
+  function playWhip() {
+    if (sfxLog.length < 3000) sfxLog.push({ t: clock, type: 'whip', vol: 1 });
+    if (SFX.ctx && SFX.ctx.state === 'running') {
+      synthWhip(SFX.ctx, SFX.out, SFX.ctx.currentTime, 1);
+    }
+  }
+
+  function playKO() {
+    if (sfxLog.length < 3000) sfxLog.push({ t: clock, type: 'ko', vol: 1 });
+    if (SFX.ctx && SFX.ctx.state === 'running') {
+      synthKO(SFX.ctx, SFX.out, SFX.ctx.currentTime, 1);
+    }
+  }
+
+  function playOrbit() {
+    if (sfxLog.length < 3000) sfxLog.push({ t: clock, type: 'orbit', vol: 1 });
+    if (SFX.ctx && SFX.ctx.state === 'running') {
+      synthOrbit(SFX.ctx, SFX.out, SFX.ctx.currentTime, 1);
+    }
+  }
+
+  function playSpit() {
+    if (sfxLog.length < 3000) sfxLog.push({ t: clock, type: 'spit', vol: 1 });
+    if (SFX.ctx && SFX.ctx.state === 'running') {
+      synthSpit(SFX.ctx, SFX.out, SFX.ctx.currentTime, 1);
+    }
+  }
+
+  function playSplit() {
+    if (sfxLog.length < 3000) sfxLog.push({ t: clock, type: 'split', vol: 1 });
+    if (SFX.ctx && SFX.ctx.state === 'running') {
+      synthSplit(SFX.ctx, SFX.out, SFX.ctx.currentTime, 1);
+    }
+  }
+
+  function playPop() {
+    if (sfxLog.length < 3000) sfxLog.push({ t: clock, type: 'pop', vol: 1 });
+    if (SFX.ctx && SFX.ctx.state === 'running') {
+      synthPop(SFX.ctx, SFX.out, SFX.ctx.currentTime, 1);
+    }
+  }
+
+  function playHeal() {
+    if (sfxLog.length < 3000) sfxLog.push({ t: clock, type: 'heal', vol: 1 });
+    if (SFX.ctx && SFX.ctx.state === 'running') {
+      synthHeal(SFX.ctx, SFX.out, SFX.ctx.currentTime, 1);
+    }
+  }
+
+  // ---------- 物理 ----------
+  function keepSpeed(b) {
+    const sp = Math.hypot(b.vx, b.vy) || 1;
+    const want = b.sp || SPEED;
+    b.vx = b.vx / sp * want;
+    b.vy = b.vy / sp * want;
+  }
+
+  function rotate(b, deg) {
+    const a = deg * Math.PI / 180;
+    const c = Math.cos(a), s = Math.sin(a);
+    const vx = b.vx * c - b.vy * s;
+    const vy = b.vx * s + b.vy * c;
+    b.vx = vx; b.vy = vy;
+  }
+
+  function bounceWall(b, pad) {
+    let hit = false;
+    const top = BORDER + (pad || 0);
+
+    if (b.x - b.hw < BORDER) { b.x = BORDER + b.hw; b.vx = Math.abs(b.vx); hit = true; }
+    else if (b.x + b.hw > W - BORDER) { b.x = W - BORDER - b.hw; b.vx = -Math.abs(b.vx); hit = true; }
+
+    if (b.y - b.hh < top) { b.y = top + b.hh; b.vy = Math.abs(b.vy); hit = true; }
+    else if (b.y + b.hh > H - BORDER) { b.y = H - BORDER - b.hh; b.vy = -Math.abs(b.vy); hit = true; }
+
+    if (hit) {
+      rotate(b, (Math.random() - 0.5) * 3);
+      keepSpeed(b);
+    }
+  }
+
+  // 兜底：碰撞分离有时会把角色往外挤一点，这里只夹位置、不改速度，保证不越出画框
+  function clampInside(b, pad) {
+    const top = BORDER + (pad || 0);
+    if (b.x - b.hw < BORDER) b.x = BORDER + b.hw;
+    else if (b.x + b.hw > W - BORDER) b.x = W - BORDER - b.hw;
+    if (b.y - b.hh < top) b.y = top + b.hh;
+    else if (b.y + b.hh > H - BORDER) b.y = H - BORDER - b.hh;
+  }
+
+  function collide(a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const dist = Math.hypot(dx, dy);
+    const minDist = a.rc + b.rc;
+    if (dist === 0 || dist >= minDist) return;
+
+    const nx = dx / dist, ny = dy / dist;
+    const overlap = minDist - dist;
+    a.x -= nx * overlap * 0.5;
+    a.y -= ny * overlap * 0.5;
+    b.x += nx * overlap * 0.5;
+    b.y += ny * overlap * 0.5;
+
+    const va = a.vx * nx + a.vy * ny;
+    const vb = b.vx * nx + b.vy * ny;
+    if (va - vb <= 0) return;
+
+    const swap = va - vb;
+    a.vx += -swap * nx;
+    a.vy += -swap * ny;
+    b.vx += swap * nx;
+    b.vy += swap * ny;
+
+    keepSpeed(a);
+    keepSpeed(b);
+  }
+
+  function step(dt) {
+    const sub = 4, h = dt / sub;
+    for (let s = 0; s < sub; s++) {
+      for (const it of items) {
+        if (it.stun > 0 || it.hold > 0 || it.dead > 0) continue;
+        it.x += it.vx * h;
+        it.y += it.vy * h;
+      }
+
+      // 喷出来的小史莱姆球一直在弹
+      for (const m of minis) {
+        m.x += m.vx * h;
+        m.y += m.vy * h;
+      }
+
+      for (const it of items) {
+        if (it.dead > 0) continue;
+        bounceWall(it, TOP_PAD);
+      }
+      for (const m of minis) bounceWall(m);
+
+      if (hero.dead <= 0 && foe.dead <= 0) collide(hero, foe);
+
+      // 小球之间互相弹开（真正造成分裂的判定在 updateBlobs 里）
+      for (let i = 0; i < minis.length; i++) {
+        for (let j = i + 1; j < minis.length; j++) collide(minis[i], minis[j]);
+      }
+
+      // 最后统一夹一次，避免分离力把任何物体顶出边框
+      for (const it of items) clampInside(it, TOP_PAD);
+      for (const m of minis) clampInside(m);
+    }
+  }
+
+  // 命中后施法者也定住：记住原速度，结束后原样恢复
+  function holdStill(it, dur) {
+    it.svx = it.vx;
+    it.svy = it.vy;
+    it.vx = 0;
+    it.vy = 0;
+    it.hold = Math.max(it.hold, dur);
+  }
+
+  // ---------- 伤害 ----------
+  function damage(target, amount, color, stunTime) {
+    if (ko.on) return;                // 击杀演出期间不再结算伤害，别把胜者也带走
+    if (target.dead > 0) return;
+    target.hp = Math.max(0, target.hp - amount);
+
+    // 字号变大后：位置再往上抬，避开头顶的十字血条；水平随机加大，多段伤害不叠在一起
+    addNum(
+      target.x,
+      target.y - target.hh - 84,
+      '-' + amount,
+      color,
+      amount >= 100 ? 26 : 18
+    );
+    fx.sparks.push({ x: target.x, y: target.y, t: 0, dur: 0.3, color: color });
+
+    // 受击反馈：白闪 + 抖动 + 挤压回弹 + 白色冲击环
+    target.flash = 0.22;
+    target.shake = 0.34;
+    target.squash = 0.26;
+    target.hpHold = 0.30;         // 血条掉血块先亮着，再缩回去
+    fx.shock.push({
+      x: target.x, y: target.y,
+      t: 0, dur: 0.26, r0: 3, r1: 30 * S + 14, color: '#ffffff'
+    });
+
+    // 受击音效：伤害越大越响
+    playHit(Math.min(1, 0.55 + amount / 220));
+
+    if (stunTime) target.stun = Math.max(target.stun, stunTime);
+
+    if (target.hp <= 0) {
+      target.dead = 1.9;
+      target.stun = 0;
+      target.hold = 0;
+      target.vx = 0;
+      target.vy = 0;
+
+      startKO(target, amount);      // 击杀演出：定格 → 慢放 → K.O. 牌
+    }
+  }
+
+  // 击杀开始的瞬间：白闪 + 双层冲击环 + 火花，并把击飞方向定下来
+  function startKO(loser, amount) {
+    if (ko.on) return;
+    const other = loser === hero ? foe : hero;
+
+    let dx = loser.x - other.x, dy = loser.y - other.y;
+    if (!dx && !dy) { dx = 0; dy = -1; }
+    const d = Math.hypot(dx, dy) || 1;
+
+    ko.on = true;
+    ko.t = 0;
+    ko.loser = loser;
+    ko.winner = other;
+    ko.dmg = amount;
+    ko.dirx = dx / d;
+    ko.diry = dy / d;
+    ko.hitX = loser.x;
+    ko.hitY = loser.y;
+    ko.flash = 1;
+    ko.cleared = false;
+
+    // 倒地者这一刻起不再画受击白闪（不然慢放里会变成一个白幽灵）
+    loser.flash = 0;
+    loser.shake = 0;
+    loser.squash = 0;
+
+    // 只留下"这一下"的飘字，把之前的 -160 / 突进 之类旧飘字清掉，画面更干净
+    if (fx.nums.length > 1) fx.nums.splice(0, fx.nums.length - 1);
+
+    minis.length = 0;                 // 场上残留的小史莱姆一起清掉，定格画面不留漂浮物
+
+    fx.shock.push({ x: loser.x, y: loser.y, t: 0, dur: 0.62, r0: 8, r1: 126, color: '#ffffff' });
+    fx.shock.push({ x: loser.x, y: loser.y, t: 0.06, dur: 0.85, r0: 3, r1: 82, color: '#ffd36b' });
+    for (let i = 0; i < 12; i++) {
+      const a = Math.PI * 2 * (i / 12) + 0.35;
+      fx.sparks.push({
+        x: loser.x + Math.cos(a) * 10,
+        y: loser.y + Math.sin(a) * 10,
+        t: 0.02, dur: 0.4 + (i % 3) * 0.08,
+        color: i % 2 ? '#ffffff' : '#ffd36b'
+      });
+    }
+    playKO();
+  }
+
+  // 倒地瞬间把这个人的技能道具全部收回，避免画面里留下浮空的鞭子 / 旋翼 / 陀螺
+  function clearDownProps(it) {
+
+    if (it === hero) {
+      skill.on = false;
+      skill.t = 0;
+      skill.idle = 0;
+      skill.hitDone = false;
+      skill.tail = 0;
+    } else {
+      whip.idle = 0;
+      minis.length = 0;             // 喷出来的小球跟着一起收走
+    }
+  }
+
+  function revive(it) {
+    const other = it === hero ? foe : hero;
+    let x, y, guard = 0;
+    do {
+      x = BORDER + it.hw + 20 + Math.random() * (W - 2 * BORDER - it.dw - 40);
+      y = BORDER + TOP_PAD + it.hh + 16 + Math.random() * (H - 2 * BORDER - TOP_PAD - it.dh - 36);
+      guard++;
+    } while (guard < 50 && Math.hypot(x - other.x, y - other.y) < 220);
+
+    it.dead = 0;
+    it.hp = MAX_HP;
+    it.hitCd = 0;
+    it.stun = 0;
+    it.hold = 0;
+    it.dodgeCd = 0;
+    it.flash = 0;
+    it.shake = 0;
+    it.squash = 0;
+    it.hpShown = MAX_HP;
+    it.hpHold = 0;
+    it.x = x;
+    it.y = y;
+    const a = Math.random() * Math.PI * 2;
+    it.vx = Math.cos(a) * SPEED;
+    it.vy = Math.sin(a) * SPEED;
+  }
+
+  // ---------- 技能：巨锤绕身旋转 ----------
+  // 锤头始终朝外、锤柄朝内，绕着兔子转圈扫人
+  function hammerHead() {
+    const r = HM.orbitR + HM.hammerLen * 0.30;
+    return { x: hero.x + Math.cos(skill.ang) * r, y: hero.y + Math.sin(skill.ang) * r };
+  }
+
+  function updateSkill(dt) {
+    if (skill.tail > 0) skill.tail = Math.max(0, skill.tail - dt);
+    if (hero.dead > 0) { skill.on = false; return; }
+
+    if (!skill.on) {
+      skill.idle += dt;
+      if (skill.idle >= HM.period) {
+        skill.idle = 0;
+        skill.on = true;
+        skill.t = 0;
+        skill.hitDone = false;
+        // 太远就先冲到对手附近，免得空转一圈
+        const dd = Math.hypot(foe.x - hero.x, foe.y - hero.y);
+        if (foe.dead <= 0 && dd > 250) {
+          const nx = (foe.x - hero.x) / dd, ny = (foe.y - hero.y) / dd;
+          const tx = Math.max(BORDER + hero.hw, Math.min(W - BORDER - hero.hw, foe.x - nx * 205));
+          const ty = Math.max(BORDER + hero.hh, Math.min(H - BORDER - hero.hh, foe.y - ny * 205));
+          fx.dash.push({ x0: hero.x, y0: hero.y, x1: tx, y1: ty, t: 0, dur: 0.30 });
+          fx.shock.push({ x: tx, y: ty, t: 0, dur: 0.36, r0: 4, r1: 40, color: '#e0552f' });
+          hero.x = tx;
+          hero.y = ty;
+        }
+
+        // 起手角朝对手偏一点，第一圈就能扫到
+        skill.ang = foe.dead > 0 ? -Math.PI / 2
+          : Math.atan2(foe.y - hero.y, foe.x - hero.x) - 0.9;
+        playOrbit();
+      }
+      return;
+    }
+
+    skill.t += dt;
+    skill.ang += dt * HM.spin;
+
+    // 锤头扫到对手 → 一次性结算
+    if (!skill.hitDone && foe.dead <= 0) {
+      const hd = hammerHead();
+      if (Math.hypot(foe.x - hd.x, foe.y - hd.y) <= HM.hitR + foe.rc * 0.86) {
+        skill.hitDone = true;
+
+        damage(foe, HM.dmg, '#ff3b12', HM.stun);
+        fx.shock.push({ x: foe.x, y: foe.y, t: 0, dur: 0.5, r0: 6, r1: 76, color: '#ff7a3c' });
+        fx.sparks.push({ x: foe.x, y: foe.y, t: 0, dur: 0.32, color: '#ffd08a' });
+        if (foe.dead <= 0) {
+          addNum(foe.x - foe.hw * 0.55, foe.y - foe.hh - 18, SCENE.burst.labelStun, '#e0a6ff', 16);
+        }
+
+        // 砸飞一点
+        const ddx = foe.x - hero.x, ddy = foe.y - hero.y;
+        const dd = Math.hypot(ddx, ddy) || 1;
+        if (foe.dead <= 0 && foe.stun <= 0) {
+          foe.vx = ddx / dd * 250;
+          foe.vy = ddy / dd * 250;
+        }
+      }
+    }
+
+    if (skill.t >= HM.dur) {
+      skill.on = false;
+      skill.idle = 0;
+      skill.tail = 0.3;
+    }
+  }
+
+  // ---------- 小史莱姆球 ----------
+  function touch(a, b) {
+    return Math.hypot(b.x - a.x, b.y - a.y) <= a.rc + b.rc + 3;
+  }
+
+  function blobAt(x, y, r, gen) {
+    return {
+      x: x, y: y, vx: 0, vy: 0, sp: 0, r: r,
+      dw: r * 2, dh: r * 2, hw: r, hh: r, rc: r,
+      gen: gen, life: SP.life, age: 0, wob: Math.random() * 6.28
+    };
+  }
+
+  // 史莱姆从嘴边喷出一颗
+  // 场上已经有母球时，这一发直接瞄准那颗母球（比对着人喷更快），撞上才会分裂
+  function spit() {
+    const mx = foe.x + (foe.face || 1) * foe.hw * 0.52;
+    const my = foe.y + foe.hh * 0.14;
+
+    let prey = null;
+    for (const b of minis) {
+      if (b.gen === 0) { prey = b; break; }
+    }
+
+    let ang, sp;
+    if (prey) {
+      ang = Math.atan2(prey.y - my, prey.x - mx) + (Math.random() - 0.5) * 0.05;
+      sp = SP.speed * 1.16;                        // 比母球快一截，保证追得上
+    } else {
+      // 打提前量：按飞行时间预测兔子落点，否则球总是落在它屁股后面
+      let px = hero.x, py = hero.y;
+      for (let k = 0; k < 2; k++) {
+        const tt = Math.hypot(px - mx, py - my) / SP.speed;
+        px = hero.x + hero.vx * tt * 0.85;
+        py = hero.y + hero.vy * tt * 0.85;
+      }
+      px = Math.max(BORDER + 20, Math.min(W - BORDER - 20, px));
+      py = Math.max(BORDER + 20, Math.min(H - BORDER - 20, py));
+
+      ang = Math.atan2(py - my, px - mx) + (Math.random() - 0.5) * 0.12;
+      sp = SP.speed;
+    }
+
+    const b = blobAt(mx + Math.cos(ang) * 14, my + Math.sin(ang) * 14, SP.r, 0);
+    b.sp = sp;
+    b.vx = Math.cos(ang) * sp;
+    b.vy = Math.sin(ang) * sp;
+    minis.push(b);
+
+    while (minis.length > (SP.maxBlobs || 8)) minis.shift();
+
+    fx.shock.push({ x: mx, y: my, t: 0, dur: 0.34, r0: 4, r1: 36, color: '#8ef07a' });
+    playSpit();
+  }
+
+  // 母球被后喷出的球撞到 → 炸成两颗小球（母球自己消失）
+  function splitBlob(b) {
+    if (window.__dbg) window.__dbg.splits++;
+    if (ko.on) return;                    // 已经进击杀演出就不再分裂
+    const idx = minis.indexOf(b);
+    if (idx < 0) return;
+    minis.splice(idx, 1);                 // 母球自己消失
+
+    const base = Math.atan2(b.vy, b.vx);
+    const n = SP.split;
+    for (let i = 0; i < n; i++) {
+      const a = base + (i % 2 === 0 ? 1 : -1) * (0.66 + Math.random() * 0.34);
+      const c = blobAt(b.x, b.y, SP.miniR, 1);
+      c.sp = b.sp * 1.04;
+      c.vx = Math.cos(a) * c.sp;
+      c.vy = Math.sin(a) * c.sp;
+      c.life = SP.life * 0.72;
+      minis.push(c);
+    }
+
+    fx.shock.push({ x: b.x, y: b.y, t: 0, dur: 0.46, r0: 4, r1: 58, color: '#b6ff8a' });
+    for (let i = 0; i < 7; i++) {
+      const a = Math.PI * 2 * (i / 7) + 0.3;
+      fx.sparks.push({
+        x: b.x + Math.cos(a) * 6, y: b.y + Math.sin(a) * 6,
+        t: 0, dur: 0.34, color: i % 2 ? '#d8ffb8' : '#8ef07a'
+      });
+    }
+    addNum(b.x, b.y - b.hh - 14, SCENE.whip.labelSplit + ' x' + n, '#a8f78a', 16);
+    playSplit();
+  }
+
+  // 吸血：每次打中兔子，史莱姆按最大生命的一定比例回血
+  function lifesteal() {
+    const heal = Math.round(MAX_HP * (SP.lifesteal || 0));
+    if (heal <= 0 || foe.dead > 0) return;
+    if (foe.hp >= MAX_HP) return;
+
+    foe.hp = Math.min(MAX_HP, foe.hp + heal);
+    foe.hpShown = Math.max(foe.hpShown, foe.hp);
+
+    addNum(foe.x, foe.y - foe.hh - 34, '+' + heal, '#9dffb0', 17);
+    fx.shock.push({ x: foe.x, y: foe.y, t: 0, dur: 0.46, r0: 5, r1: 54, color: '#7dffa0' });
+    for (let k = 0; k < 5; k++) {
+      const a = -Math.PI / 2 + (k - 2) * 0.42;
+      fx.sparks.push({
+        x: foe.x + Math.cos(a) * foe.hw * 0.7,
+        y: foe.y + Math.sin(a) * foe.hh * 0.7,
+        t: 0, dur: 0.3, color: '#b6ffc6'
+      });
+    }
+    playHeal();
+  }
+
+  function updateBlobs(dt) {
+    if (hero.hitCd > 0) hero.hitCd = Math.max(0, hero.hitCd - dt);
+
+    for (let i = minis.length - 1; i >= 0; i--) {
+      const b = minis[i];
+      if (!b) continue;                  // 击杀瞬间列表可能被清空，别踩空
+
+      b.age += dt;
+      b.life -= dt;
+
+      if (b.life <= 0) { minis.splice(i, 1); continue; }
+
+      // 撞到兔子：扣一次血，球自己消失
+      if (hero.dead <= 0 && hero.hitCd <= 0 &&
+          Math.hypot(hero.x - b.x, hero.y - b.y) <= b.r + hero.rc * 0.90) {
+        hero.hitCd = 0.34;
+        damage(hero, SP.dmg, '#8ef07a', 0);
+        fx.shock.push({ x: b.x, y: b.y, t: 0, dur: 0.34, r0: 2.5, r1: 42, color: '#5fd94a' });
+        if (hero.dead <= 0) {
+          addNum(b.x, b.y - b.hh - 12, SCENE.whip.labelBreak, '#ccffb4', 14);
+          lifesteal();                       // 打中就吸血
+        }
+        minis.splice(i, 1);
+        playPop();
+        continue;
+      }
+
+      // 被更晚喷出的球撞到 → 母球分裂（小球不再分裂）
+      if (b.gen === 0) {
+        let hitBy = null;
+        for (const o of minis) {
+          if (o === b || o.gen !== 0 || o.age >= b.age) continue;
+          if (Math.hypot(o.x - b.x, o.y - b.y) <= o.r + b.r + 2) { hitBy = o; break; }
+        }
+        if (hitBy) { splitBlob(b); continue; }
+      }
+    }
+  }
+
+  // ---------- 喷吐节奏 ----------
+  // 一次进攻 = 连喷两颗：第一颗打兔子，第二颗隔 0.34s 追上第一颗把它撞裂
+  function updateWhip(dt) {
+    if (foe.dead > 0) { whip.idle = 0; whip.chain = 0; return; }
+    if (foe.stun > 0) return;               // 被砸晕时喷不出来
+
+    if (whip.chain > 0) {
+      whip.chainT -= dt;
+      if (whip.chainT <= 0) {
+        whip.chain -= 1;
+        whip.chainT = 0.34;
+        spit();
+      }
+      return;
+    }
+
+    whip.idle += dt;
+    if (whip.idle >= SP.period) {
+      whip.idle = 0;
+      spit();
+      whip.chain = 1;
+      whip.chainT = 0.34;
+    }
+  }
+
+  function updateFx(dt) {
+    for (const k in fx) {
+      const arr = fx[k];
+      for (let i = arr.length - 1; i >= 0; i--) {
+        arr[i].t += dt;
+        if (arr[i].t >= arr[i].dur) arr.splice(i, 1);
+      }
+    }
+  }
+
+  function update(dtReal) {
+    let dt = dtReal;
+
+    // ---------- 击杀演出：打击定格 → 慢放看清 → K.O. 牌 ----------
+    if (ko.on) {
+      ko.t += dtReal;
+      if (ko.flash > 0) ko.flash = Math.max(0, ko.flash - dtReal * 3.0);
+
+      if (ko.t < KO.stop) dt = 0;                        // 命中瞬间硬定格：这一下先看住
+      else if (ko.t < KO.slowEnd) dt = dtReal * KO.slow; // 慢放：看着被打飞、翻滚、淡出
+      else dt = 0;                                       // 慢放结束 → 定住画面出 K.O.
+
+      if (ko.t >= KO.slowEnd && !ko.cleared) {
+        ko.cleared = true;
+        clearDownProps(ko.loser);                        // 倒地这一方的技能道具到这时再收
+      }
+      if (ko.t >= KO.end) koFreeze = true;               // 演出完 → 静止定格（点击重开）
+    }
+
+    clock += dtReal;
+
+    if (dt > 0) {
+      step(dt);
+
+      for (const it of items) {
+        if (it.stun > 0) {
+          it.stun -= dt;
+          if (it.stun <= 0) {
+            it.stun = 0;
+            const a = Math.random() * Math.PI * 2;   // 晕完换个方向继续弹
+            it.vx = Math.cos(a) * SPEED;
+            it.vy = Math.sin(a) * SPEED;
+          }
+        }
+        if (it.hold > 0) {
+          it.hold -= dt;
+          if (it.hold <= 0 && it.dead <= 0) {
+            it.hold = 0;
+            it.vx = it.svx;                          // 恢复原来的方向
+            it.vy = it.svy;
+            keepSpeed(it);
+          }
+        }
+        if (it.dead > 0) {
+          it.dead -= dt;
+          if (it.dead <= 0) revive(it);
+        }
+
+        // 受击反馈计时 + 血条掉血残影
+        if (it.flash > 0) it.flash = Math.max(0, it.flash - dt);
+        if (it.shake > 0) it.shake = Math.max(0, it.shake - dt);
+        if (it.squash > 0) it.squash = Math.max(0, it.squash - dt);
+        if (it.turn > 0) it.turn = Math.max(0, it.turn - dt);
+
+        // 转身：朝水平移动方向镜像（带 26px/s 死区，竖直方向抖不会来回乱翻）
+        if (Math.abs(it.vx) > 26) {
+          const want = it.vx > 0 ? 1 : -1;
+          if (want === it.face) {
+            it.faceT = 0;
+          } else {
+            it.faceT += dt;
+            if (it.faceT >= 0.07) { it.face = want; it.faceT = 0; it.turn = 0.16; }
+          }
+        } else {
+          it.faceT = 0;
+        }
+        if (it.hpHold > 0) it.hpHold = Math.max(0, it.hpHold - dt);
+        else it.hpShown += (it.hp - it.hpShown) * Math.min(1, dt * 4.5);
+        if (it.hpShown < it.hp) it.hpShown = it.hp;
+      }
+
+      updateSkill(dt);
+      updateWhip(dt);
+      updateBlobs(dt);
+      updateFx(dt);
+    }
+
+    // 慢放/定格期间：飘字和冲击环仍按真实时间走完，别在画面里挂成半截
+    if (ko.on && dtReal > dt) {
+      const extra = dtReal - dt;
+      for (const k of ['nums', 'shock', 'sparks', 'dash']) {
+        const arr = fx[k];
+        for (let i = arr.length - 1; i >= 0; i--) {
+          arr[i].t += extra;
+          if (arr[i].t >= arr[i].dur) arr.splice(i, 1);
+        }
+      }
+    }
+
+    // 定格进入"结束画面"时才收干净，避免把击杀那一刻的冲击环 / 飘字提前抹掉
+    if (koFreeze) {
+      fx.shock.length = 0;
+      fx.sparks.length = 0;
+      fx.dash.length = 0;
+      fx.nums.length = 0;              // 定格画面不保留任何飘字
+
+      // 结束帧收干净：双方都不再处于出招状态，避免留下转了一半的锤子和飘着的小球
+      skill.on = false;
+      skill.t = 0;
+      skill.idle = 0;
+      skill.hitDone = false;
+      skill.tail = 0;
+
+      whip.idle = 0;
+      minis.length = 0;
+    }
+  }
+
+  // ---------- 绘制 ----------
+  function drawBorder() {
+    ctx.strokeStyle = 'rgba(20, 30, 55, 0.12)';
+    ctx.lineWidth = BORDER;
+    ctx.strokeRect(BORDER / 2, BORDER / 2, W - BORDER, H - BORDER);
+  }
+
+  // 脚下的椭圆投影
+  function drawShadow(it) {
+    if (it.dead > 0) return;                 // 倒地后人没了，投影也跟着消失
+
+    const rx = Math.max(14, it.hw * 1.16);
+    const ry = rx * 0.36;
+    const cy = it.y + it.hh + ry * 0.30;
+
+    ctx.save();
+    ctx.translate(it.x, cy);
+    ctx.scale(1, ry / rx);
+    const g = ctx.createRadialGradient(0, 0, 1, 0, 0, rx);
+    g.addColorStop(0, 'rgba(20,25,40,0.46)');
+    g.addColorStop(0.45, 'rgba(20,25,40,0.26)');
+    g.addColorStop(1, 'rgba(20,25,40,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, rx, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 倒地者的演出进度：0 → 1（被打飞、翻滚、淡出）
+  function deathP() {
+    return Math.max(0, Math.min(1, (ko.t - 0.05) / 1.15));
+  }
+
+  // 倒地者被击飞的位移（角色和它的血条共用，血条才不会留在原地）
+  function deathOffset(it) {
+    if (!(it.dead > 0 && ko.on)) return { kx: 0, ky: 0 };
+    const p = deathP();
+    const e = 1 - Math.pow(1 - p, 2.4);                    // 缓出：先飞出去再停住
+    const bx = it.x + ko.dirx * 110 * e;
+    const by = it.y + ko.diry * 74 * e + 40 * e * e;       // 飞出去 + 往下坠一点
+    // 别被打飞出画面：留出半个身位
+    return {
+      kx: Math.max(it.hw + 4, Math.min(W - it.hw - 4, bx)) - it.x,
+      ky: Math.max(it.hh + 4, Math.min(H - it.hh - 4, by)) - it.y
+    };
+  }
+
+  function drawChar(it) {
+    const dying = it.dead > 0;
+    if (dying && !ko.on) return;             // 非击杀演出时，倒地即消失
+
+    const ready = it.img && it.img.complete && it.img.naturalWidth;
+
+    // 受击抖动（高频衰减）
+    const sk = it.shake > 0 ? it.shake / 0.34 : 0;
+    const ox = sk > 0 ? Math.sin(clock * 86) * 4.6 * sk : 0;
+    const oy = sk > 0 ? Math.cos(clock * 71) * 2.8 * sk : 0;
+
+    // 受击挤压回弹
+    const sq = it.squash > 0 ? it.squash / 0.26 : 0;
+
+    // 击杀：被打飞 + 翻滚 + 淡出（跟着演出时间走，不受慢放影响，节奏才稳）
+    let kx = 0, ky = 0, krot = 0, ksc = 1, kal = 1;
+    if (dying && ko.on) {
+      const p = deathP();
+      const e = 1 - Math.pow(1 - p, 2.4);
+      const dir = ko.dirx >= 0 ? 1 : -1;
+      const off = deathOffset(it);
+      kx = off.kx;
+      ky = off.ky;
+      krot = dir * e * 1.9;                                // 翻滚约 109°
+      ksc = 1 + 0.13 * e;
+      kal = p < 0.58 ? 1 : Math.max(0, 1 - (p - 0.58) / 0.42);
+      if (kal <= 0.001) return;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = kal;
+    ctx.translate(it.x + ox + kx, it.y + oy + ky);
+
+    if (ksc !== 1) ctx.scale(ksc, ksc);
+    if (krot) ctx.rotate(krot);
+    if (sq > 0) ctx.scale(1 + 0.11 * sq, 1 - 0.11 * sq);
+    if (it.stun > 0) ctx.rotate(Math.sin(clock * 20) * 0.055);
+
+    // 左右转身：朝哪边跑就朝哪边站，转身的一瞬间横向压一下，像真拧过去
+    const tp = it.turn > 0 ? Math.min(1, it.turn / 0.16) : 0;
+    if ((it.face || 1) < 0) ctx.scale(-1, 1);
+    if (tp > 0) ctx.scale(1 - 0.14 * tp, 1 + 0.07 * tp);
+
+    if (ready) {
+      ctx.drawImage(it.img, -it.hw, -it.hh, it.dw, it.dh);
+
+      // 受击白闪
+      if (!dying && it.flash > 0 && it.flashArt) {
+        const a = it.flash / 0.22;
+        ctx.globalAlpha = kal * Math.pow(Math.max(0, a), 1.5) * 0.58;
+        ctx.drawImage(it.flashArt, -it.hw, -it.hh, it.dw, it.dh);
+        ctx.globalAlpha = kal;
+      }
+    } else {
+      ctx.fillStyle = it.accent;
+      ctx.beginPath();
+      ctx.arc(0, 0, it.hw, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 血条：头顶一个十字（加号）血瓶，血从下往上灌；掉到一半以下变红
+  const HPX = SCENE.hud.crossSize;   // 十字架边长（再乘 S 与 HB）
+
+  function crossPath(g, cx, cy, s, t) {
+    const a = s / 2, b = s * t / 2;
+    g.beginPath();
+    g.moveTo(cx - b, cy - a);
+    g.lineTo(cx + b, cy - a);
+    g.lineTo(cx + b, cy - b);
+    g.lineTo(cx + a, cy - b);
+    g.lineTo(cx + a, cy + b);
+    g.lineTo(cx + b, cy + b);
+    g.lineTo(cx + b, cy + a);
+    g.lineTo(cx - b, cy + a);
+    g.lineTo(cx - b, cy + b);
+    g.lineTo(cx - a, cy + b);
+    g.lineTo(cx - a, cy - b);
+    g.lineTo(cx - b, cy - b);
+    g.closePath();
+  }
+
+  function drawHpBar(it) {
+    let kal = 1;
+    // K.O. 牌出来时血条淡出，别和落款打架
+    if (ko.on && ko.t >= KO.banner) kal = Math.max(0, 1 - (ko.t - KO.banner) / 0.18);
+
+    if (it.dead > 0) {
+      if (!ko.on) return;
+      const p = deathP();                     // 倒地者的血条跟着人一起淡出
+      kal = Math.min(kal, p < 0.42 ? 1 : Math.max(0, 1 - (p - 0.42) / 0.34));
+    }
+    if (kal <= 0.001) return;
+
+    const s = Math.round(HPX * S * HB);        // 十字架边长
+    const th = 0.44;                           // 手臂厚度（占边长的比例）
+    const txt = String(Math.round(it.hp));
+
+    ctx.save();
+    ctx.globalAlpha = kal;
+
+    // 十字架始终吊在角色正上方；血条没有碰撞体积，角色贴边就让它跟着出画
+    // （画布自身会把超出部分裁掉，血条不会被挤回画面里）
+    // 倒地时血条跟着一起被打飞，不会孤零零留在原地
+    const off = deathOffset(it);
+    const cx = it.x + off.kx;
+    const cy = it.y + off.ky - it.hh - s / 2 - 16;
+
+    // 数值要放进十字架里：按十字宽度自动收字号，四位数也不会顶到边框
+    let fs = Math.round(s * 0.36);
+    ctx.font = '700 ' + fs + 'px ui-sans-serif, system-ui, "PingFang SC", sans-serif';
+    while (fs > 9 && ctx.measureText(txt).width > s - 13) {
+      fs -= 1;
+      ctx.font = '700 ' + fs + 'px ui-sans-serif, system-ui, "PingFang SC", sans-serif';
+    }
+
+    const ratio = Math.max(0, Math.min(1, it.hp / MAX_HP));
+    const ghost = Math.max(ratio, Math.min(1, it.hpShown / MAX_HP));
+
+    // 1) 底槽：近黑的十字
+    crossPath(ctx, cx, cy, s, th);
+    ctx.fillStyle = '#08161f';
+    ctx.fill();
+
+    // 2) 剩余血量：从下往上灌满十字（clip 在十字里，只染到十字内部）
+    ctx.save();
+    crossPath(ctx, cx, cy, s, th);
+    ctx.clip();
+    const bottom = cy + s / 2;
+    if (ghost > ratio + 0.001) {               // 掉血残影：刚掉的那一截先留浅影
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
+      ctx.fillRect(cx - s / 2, bottom - s * ghost, s, s * (ghost - ratio));
+    }
+    ctx.fillStyle = ratio > SCENE.hud.redBelow ? SCENE.hud.fullColor : SCENE.hud.lowColor;   // 掉到一半以下 → 变红报警
+    ctx.fillRect(cx - s / 2, bottom - s * ratio, s, s * ratio);
+    ctx.restore();
+
+    // 3) 外框：平时细黑边，受击时闪一下白光
+    crossPath(ctx, cx, cy, s, th);
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = it.flash > 0
+      ? 'rgba(255, 255, 255, ' + Math.min(1, it.flash / 0.22) + ')'
+      : 'rgba(6, 20, 32, 0.62)';
+    ctx.stroke();
+
+    // 4) 血量数值压在十字架正中间：跟着填充换色——白色灌到字上就用深字，暗/红底上用白字
+    const onWhite = ratio >= 0.6;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(2, fs * 0.15);
+    ctx.strokeStyle = onWhite ? 'rgba(255, 255, 255, 0.9)' : 'rgba(6, 20, 32, 0.92)';
+    ctx.strokeText(txt, cx, cy + Math.round(fs * 0.05));
+    ctx.fillStyle = onWhite ? '#08161f' : '#ffffff';
+    ctx.fillText(txt, cx, cy + Math.round(fs * 0.05));
+
+    ctx.restore();          // 对应函数开头的 save（倒地淡出用）
+  }
+
+  // 巨锤绕身旋转：锤头朝外、锤柄朝内，绕兔子画圈
+  function drawHammer() {
+    if (!cane.ready) return;
+    if (hero.dead > 0) return;
+
+    const active = skill.on;
+    if (!active && skill.tail <= 0) return;
+
+    let alpha = 1;
+    if (active && skill.t < 0.12) alpha = skill.t / 0.12;
+    if (skill.tail > 0) alpha = Math.min(alpha, skill.tail / 0.3);
+
+    const cx = hero.x, cy = hero.y;
+
+    // 轨道圈：让"绕着角色转"这件事看得见（击杀演出时不画，免得像残留 UI）
+    if (!ko.on) {
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.28;
+      ctx.strokeStyle = '#ffe08a';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([9, 11]);
+      ctx.lineDashOffset = -clock * 70;
+      ctx.beginPath();
+      ctx.arc(cx, cy, HM.orbitR + HM.hammerLen * 0.30, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 运动拖影：越靠后的残影越淡
+    for (let i = 3; i >= 0; i--) {
+      const a = skill.ang - i * 0.15;
+      ctx.save();
+      ctx.globalAlpha = alpha * (i === 0 ? 1 : Math.max(0, 0.30 - i * 0.075));
+      ctx.translate(cx + Math.cos(a) * HM.orbitR, cy + Math.sin(a) * HM.orbitR);
+      ctx.rotate(a);
+      ctx.drawImage(cane.img, -cane.dw / 2, -cane.dh / 2, cane.dw, cane.dh);
+      ctx.restore();
+    }
+
+    // 锤头光晕
+    const hd = hammerHead();
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.5;
+    const g = ctx.createRadialGradient(hd.x, hd.y, 1, hd.x, hd.y, HM.hitR * 1.6);
+    g.addColorStop(0, 'rgba(255, 226, 140, 0.50)');
+    g.addColorStop(1, 'rgba(255, 226, 140, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(hd.x, hd.y, HM.hitR * 1.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 陀螺脚下的投影
+  function drawTopShadow(x, y, rx, alpha) {
+    const ry = rx * 0.42;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1, ry / rx);
+    const g = ctx.createRadialGradient(0, 0, 1, 0, 0, rx);
+    g.addColorStop(0, 'rgba(20,25,40,' + alpha + ')');
+    g.addColorStop(0.5, 'rgba(20,25,40,' + (alpha * 0.5) + ')');
+    g.addColorStop(1, 'rgba(20,25,40,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, rx, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 自转：只用横向运动模糊表现转速，形状不再压扁变形
+  function drawSpinner(obj, size, art, alpha) {
+    if (!art || !art.c) return;
+    const dh = size;
+    const dw = size * (obj.dw / obj.dh);        // 原图比例下的显示宽度
+    const bw = dw * (art.k || 1);               // 含左右拖影的显示宽度
+
+    // 拖影宽度随自转相位轻微呼吸，画面不至于完全静止
+    const pulse = 1 + 0.02 * Math.sin(obj.spin * 0.85);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(obj.x, obj.y);
+    ctx.drawImage(art.c, -bw * pulse / 2, -dh / 2, bw * pulse, dh);
+    ctx.restore();
+  }
+
+  // 喷出的小史莱姆球：绿色果冻质感，沿运动方向拉伸，脸上带眼睛
+  function drawBlobs() {
+    if (koFreeze) return;
+
+    for (const b of minis) {
+      let alpha = 1;
+      if (b.life < 1.2) alpha = Math.max(0, b.life / 1.2);
+
+      const wob = 1 + 0.09 * Math.sin(b.wob + clock * 9);
+      const sp = Math.hypot(b.vx, b.vy) || 1;
+      const stretch = Math.min(1.20, 1 + sp / 2800);
+      const ang = Math.atan2(b.vy, b.vx);
+      const r = b.r;
+
+      // 身体：沿运动方向拉伸
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(b.x, b.y);
+      ctx.rotate(ang);
+      ctx.scale(stretch, wob / stretch);
+
+      const g = ctx.createRadialGradient(-r * 0.30, -r * 0.34, r * 0.12, 0, 0, r * 1.06);
+      g.addColorStop(0, b.gen ? '#d8ffbc' : '#affa90');
+      g.addColorStop(0.55, b.gen ? '#84e65e' : '#5fd94a');
+      g.addColorStop(1, '#2f8f2a');
+
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.lineWidth = Math.max(2, r * 0.15);
+      ctx.strokeStyle = '#123d18';
+      ctx.stroke();
+      ctx.restore();
+
+      // 脸：不跟着旋转，始终朝上
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      const ex = r * 0.34, ey = r * 0.16;
+      ctx.fillStyle = '#123d18';
+      ctx.beginPath();
+      ctx.ellipse(b.x - ex, b.y - ey, r * 0.11, r * 0.16, 0, 0, Math.PI * 2);
+      ctx.ellipse(b.x + ex, b.y - ey, r * 0.11, r * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#123d18';
+      ctx.lineWidth = Math.max(1.4, r * 0.09);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(b.x, b.y + r * 0.16, r * 0.30, 0.18 * Math.PI, 0.82 * Math.PI);
+      ctx.stroke();
+
+      // 高光
+      ctx.beginPath();
+      ctx.arc(b.x - r * 0.34, b.y - r * 0.40, r * 0.15, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // （鞭子绘制已移除：B 位改成喷吐小球）
+  // 蓄力结束扑向目标时的残影轨迹
+  function drawDash() {
+    for (const d of fx.dash) {
+      const p = d.t / d.dur;
+      const a = 1 - p;
+
+      ctx.save();
+      ctx.lineCap = 'round';
+
+      ctx.globalAlpha = a * 0.16;
+      ctx.strokeStyle = '#ffb08a';
+      ctx.lineWidth = 13 + 6 * a;
+      ctx.beginPath();
+      ctx.moveTo(d.x0, d.y0);
+      ctx.lineTo(d.x1, d.y1);
+      ctx.stroke();
+
+      ctx.globalAlpha = a * 0.55;
+      ctx.strokeStyle = '#e0552f';
+      ctx.lineWidth = 1.6 + 3 * a;
+      ctx.beginPath();
+      ctx.moveTo(d.x0, d.y0);
+      ctx.lineTo(d.x1, d.y1);
+      ctx.stroke();
+
+      // 沿途残影
+      for (let i = 1; i <= 3; i++) {
+        const u = i / 4;
+        const x = d.x0 + (d.x1 - d.x0) * u;
+        const y = d.y0 + (d.y1 - d.y0) * u;
+        ctx.globalAlpha = a * 0.20 * (1 - u * 0.4);
+        ctx.fillStyle = '#ff9b6a';
+        ctx.beginPath();
+        ctx.arc(x, y, 15 * (1 - u * 0.45), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+  }
+
+  function drawShock() {
+    for (const s of fx.shock) {
+      const p = s.t / s.dur;
+      const r = s.r0 + (s.r1 - s.r0) * (1 - Math.pow(1 - p, 2));
+      ctx.save();
+      ctx.globalAlpha = (1 - p) * 0.8;
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2.0 * (1 - p) + 0.6;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawSparks() {
+    for (const s of fx.sparks) {
+      const p = s.t / s.dur;
+      ctx.save();
+      ctx.globalAlpha = 1 - p;
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 1.4;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + 0.4;
+        const r0 = 4 + p * 13;
+        const r1 = r0 + 5 * (1 - p);
+        ctx.beginPath();
+        ctx.moveTo(s.x + Math.cos(a) * r0, s.y + Math.sin(a) * r0);
+        ctx.lineTo(s.x + Math.cos(a) * r1, s.y + Math.sin(a) * r1);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawStun() {
+    for (const it of items) {
+      if (it.stun <= 0 || it.dead > 0) continue;
+      const cy = it.y - it.hh - 7;
+      for (let i = 0; i < 3; i++) {
+        const a = clock * 5 + i * (Math.PI * 2 / 3);
+        const x = it.x + Math.cos(a) * 12.5;
+        const y = cy + Math.sin(a) * 3.5 - Math.abs(Math.sin(a)) * 1.5;
+        const r = 2.4;
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = '#f1c40f';
+        ctx.beginPath();
+        for (let k = 0; k < 8; k++) {
+          const rr = k % 2 === 0 ? r : r * 0.38;
+          const th = -Math.PI / 2 + k * Math.PI / 4;
+          const px = x + Math.cos(th) * rr;
+          const py = y + Math.sin(th) * rr;
+          if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawNums() {
+    for (const n of fx.nums) {
+      const p = n.t / n.dur;
+      const sz = n.size;
+
+      ctx.save();
+      ctx.font = '800 ' + sz + 'px ui-sans-serif, system-ui, "PingFang SC", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // 字号变大后整体上移半个字高，别把角色压住；同时夹在画面内，避免被裁
+      const tw = ctx.measureText(n.text).width;
+      const nx = Math.min(W - 8 - tw / 2, Math.max(8 + tw / 2, n.x));
+      const ny = Math.max(sz * 0.62 + 8, Math.min(H - 8, n.y - sz * 0.52 - p * 30));
+
+      // 快速淡入 → 中间全程不透明（保证看得清）→ 末尾才淡出
+      const fadeIn = p < 0.12 ? p / 0.12 : 1;
+      const fadeOut = p > 0.72 ? Math.max(0, 1 - (p - 0.72) / 0.28) : 1;
+      ctx.globalAlpha = fadeIn * fadeOut;
+
+      // 细深色描边勾轮廓，填充保持鲜亮，蓝底上也一眼可辨
+      ctx.lineWidth = Math.max(2.6, sz * 0.10);
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
+      ctx.strokeStyle = 'rgba(8, 28, 46, 0.58)';
+      ctx.strokeText(n.text, nx, ny);
+
+      ctx.fillStyle = n.color;
+      ctx.fillText(n.text, nx, ny);
+      ctx.restore();
+    }
+  }
+
+  // 击杀后的 K.O. 牌：压暗画面 → 大字砸进来
+  function drawKO() {
+    if (!ko.on) return;
+
+    // 1) 背景压暗（让白字和蓝底拉开层次）
+    const dp = Math.max(0, Math.min(1, (ko.t - KO.banner) / 0.30));
+    if (dp > 0) {
+      ctx.fillStyle = 'rgba(3, 26, 44, ' + (0.15 * dp) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (dp <= 0) return;
+
+    const ease = 1 - Math.pow(1 - dp, 3);
+
+    // K.O. 尽量别压在胜者脸上：胜者靠近画面中间时，把字放到他相反的一侧
+    let cy = H * 0.40;
+    const win = ko.winner;
+    if (win && Math.abs(win.y - cy) < 132 && Math.abs(win.x - W / 2) < 280) {
+      cy = win.y > H * 0.5 ? H * 0.19 : H * 0.74;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = ease;
+    ctx.translate(W / 2, cy);
+    ctx.scale(0.62 + 0.38 * ease + 0.05 * Math.sin(ease * Math.PI), 0.62 + 0.38 * ease + 0.05 * Math.sin(ease * Math.PI));
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.font = '900 124px ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif';
+    ctx.lineWidth = 20;
+    ctx.strokeStyle = 'rgba(4, 20, 34, 0.9)';
+    ctx.strokeText('K.O.', 0, 0);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('K.O.', 0, 0);
+    ctx.restore();
+  }
+
+  function render() {
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+
+    // 击杀瞬间：整屏震动（幅度按真实时间衰减）
+    let shx = 0, shy = 0;
+    if (ko.on && ko.t < 0.6) {
+      const k = ko.t < KO.stop ? 1 : Math.max(0, 1 - (ko.t - KO.stop) / 0.44);
+      shx = Math.sin(ko.t * 97) * 11 * k;
+      shy = Math.cos(ko.t * 79) * 8 * k;
+      ctx.translate(shx, shy);
+    }
+
+    // 击杀慢放镜头：朝两人中间轻轻推近，把这一下放大给你看
+    if (ko.on) {
+      const zp = Math.max(0, Math.min(1, (ko.t - KO.stop * 0.6) / 1.0));
+      const z = 1 + 0.22 * (1 - Math.pow(1 - zp, 3));
+      const cx = Math.max(W * 0.30, Math.min(W * 0.70, (ko.hitX + ko.winner.x) / 2));
+      const cy = Math.max(H * 0.30, Math.min(H * 0.70, (ko.hitY + ko.winner.y) / 2));
+      ctx.translate(cx, cy);
+      ctx.scale(z, z);
+      ctx.translate(-cx, -cy);
+    }
+
+    ctx.fillStyle = '#11b4f3';                 // 纯色背景
+    ctx.fillRect(-40, -40, W + 80, H + 80);    // 多画一圈，震屏时不会露出底色
+
+    drawBorder();
+    drawDash();
+    for (const it of items) drawShadow(it);
+    for (const it of items) drawChar(it);
+    drawBlobs();
+    drawHammer();
+    for (const it of items) drawHpBar(it);   // 血条压在最上层，保证数值始终可读
+    drawShock();
+    drawSparks();
+    drawStun();
+    drawNums();
+
+    // 击杀白闪（压在场景上、K.O. 牌下）
+    if (ko.on) {
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);   // 白闪和 K.O. 牌不跟着镜头推近
+      if (ko.flash > 0) {
+        ctx.fillStyle = 'rgba(255, 255, 255, ' + (ko.flash * 0.38) + ')';
+        ctx.fillRect(0, 0, W, H);
+      }
+    }
+
+    drawKO();                                  // K.O. 牌永远是最上层
+  }
+
+  // ---------- 主循环 ----------
+  let paused = false;
+  let last = performance.now();
+
+  function loop(now) {
+    const dt = Math.min((now - last) / 1000, 1 / 30);
+    last = now;
+
+    if (!Wc || !Hc) resize();
+
+    if (Wc && Hc) {
+      if (!paused && !koFreeze) update(dt);   // 定格 / 暂停时只停止推进逻辑
+      render();                              // 仍然每帧重画，避免窗口尺寸变化把画面清空
+    }
+    requestAnimationFrame(loop);
+  }
+
+  let soundUnlocked = false;
+
+  frame.addEventListener('click', () => {
+    // 浏览器要求先有手势才给放声音：第一次点击只解锁音频，不打断播放
+    if (!soundUnlocked) {
+      soundUnlocked = true;
+      ensureAudio();
+      return;
+    }
+
+    if (koFreeze) {
+      koFreeze = false;
+      ko.on = false;                 // 退出击杀演出，回到正常对局
+      ko.t = 0;
+      ko.flash = 0;
+      ko.cleared = false;
+      fx.shock.length = 0;
+      fx.sparks.length = 0;
+      for (const it of items) if (it.dead > 0) revive(it);
+      paused = false;
+      last = performance.now();
+      render();
+      return;
+    }
+
+    if (ko.on) return;          // 击杀演出期间不响应暂停，等演出走完
+
+    paused = !paused;
+    if (!paused) { last = performance.now(); render(); }
+  });
+
+  window.addEventListener('resize', resize);
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(frame);
+
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
