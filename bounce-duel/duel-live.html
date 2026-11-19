@@ -277,9 +277,9 @@
       speed: [180, 320],
 
       spit: {
-        period: 5.0,         // 每 5s 喷一组
+        period: 4.7,         // 每 4.7s 喷一组
         chain: 0.34,         // 两连喷的间隔
-        dmgRatio: 0.18,      // 单球伤害 = 18% × 对方最大生命 = 1800
+        dmgRatio: 0.21,      // 单球伤害 = 21% × 对方最大生命 = 2100
         speed: 380,
         r: 33, miniR: 23,
         life: 14,
@@ -291,21 +291,27 @@
 
       // ---- 技能一：站在道德制高点 ----
       moral: {
-        cd: 22,              // 冷却 22s
+        cd: 30,              // 冷却 30s
         air: 5,              // 浮空 5s，期间免疫全部伤害
         counterChance: 0.45, // 对轴概率：兔子放大招时，有多少概率刚好同时起飞挡掉
-        startCd: 7           // 开局初始冷却
+        startCd: 12,         // 开局初始冷却
+        holdMax: 20,         // 就绪后最多再留 20s，到点必放
+        threatRange: 340,    // 兔子挥锤且距离小于这个值时，值得起飞硬吃
+        lowHp: 0.45,         // 自身血量低于 45% 时，倾向于用掉
+        watchHp: 0.35        // 兔子血量低于这个值 → 留招等对轴
       },
 
       // ---- 技能二：历史的回眸 ----
       history: {
-        cd: 26,
+        cd: 15,              // 冷却 15s
         lookBack: 10,        // 回看窗口（秒）
         healRatio: 0.30,     // 回「上一个 10s 窗口承伤」的 30%
         reflectRatio: 0.20,  // 把「本 10s 窗口承伤」的 20% 打回去
         mute: 10,            // 施放后停手 10s
-        needRatio: 0.05,     // 最近 10s 承伤超过 5% 血才值得放
-        startCd: 10
+        needRatio: 0.12,     // 最近 10s 承伤 >= 12% 最大生命才值得放
+        floorRatio: 0.03,    // 留满 20s 后的保底门槛：至少吃到 3% 伤害才放
+        holdMax: 20,         // 就绪后最多再留 20s
+        startCd: 8
       }
     },
 
@@ -516,8 +522,8 @@
   };
   const S = {
     idle: 2.0, chain: 0, chainT: 0,
-    moral: { cd: CFG.slime.moral.startCd, air: 0 },
-    history: { cd: CFG.slime.history.startCd, mute: 0 },
+    moral: { cd: CFG.slime.moral.startCd, air: 0, readyFor: 0 },
+    history: { cd: CFG.slime.history.startCd, mute: 0, readyFor: 0 },
     lastHeal: 0, lastReflect: 0
   };
 
@@ -570,8 +576,8 @@
     R.ultUsed = false; R.lockT = 0; R.iceT = 0; R.freezeT = 0;
 
     S.idle = 2.0; S.chain = 0; S.chainT = 0;
-    S.moral.cd = CFG.slime.moral.startCd; S.moral.air = 0;
-    S.history.cd = CFG.slime.history.startCd; S.history.mute = 0;
+    S.moral.cd = CFG.slime.moral.startCd; S.moral.air = 0; S.moral.readyFor = 0;
+    S.history.cd = CFG.slime.history.startCd; S.history.mute = 0; S.history.readyFor = 0;
     S.lastHeal = 0; S.lastReflect = 0;
 
     document.getElementById('verdict').classList.remove('show');
@@ -858,6 +864,7 @@
     if (!force && S.moral.cd > 0) return;
     S.moral.cd = M.cd;
     S.moral.air = M.air;
+    S.moral.readyFor = 0;
     slime.sky = M.air;
 
     sfxMoral();
@@ -884,6 +891,7 @@
 
     S.history.cd = Hc.cd;
     S.history.mute = Hc.mute;
+    S.history.readyFor = 0;
     S.lastHeal = healAmt; S.lastReflect = reflect;
 
     sfxHistory();
@@ -917,22 +925,39 @@
     if (slime.hp <= 0) return;
     const M = CFG.slime.moral, Hc = CFG.slime.history;
 
-    if (S.moral.cd > 0) S.moral.cd = Math.max(0, S.moral.cd - dt);
-    if (S.history.cd > 0) S.history.cd = Math.max(0, S.history.cd - dt);
+    // ---- 冷却计时：就绪后开始累积"已经等了多久" ----
+    if (S.moral.cd > 0) { S.moral.cd = Math.max(0, S.moral.cd - dt); S.moral.readyFor = 0; }
+    else if (S.moral.air <= 0) S.moral.readyFor += dt;
 
-    // 兔子血量进危险区后，史莱姆会「留技能」，专门等大招对轴
-    const savingForUlt = !R.ultUsed && rabbit.hp <= rabbit.maxHp * 0.42;
+    if (S.history.cd > 0) { S.history.cd = Math.max(0, S.history.cd - dt); S.history.readyFor = 0; }
+    else if (S.history.mute <= 0) S.history.readyFor += dt;
 
+    // ================= 道德制高点的释放判断 =================
+    // 只在"能挡到东西"的时候起飞，但留招最多 20s
     if (S.moral.air > 0) {
       S.moral.air = Math.max(0, S.moral.air - dt);
       slime.sky = S.moral.air;
-    } else if (S.moral.cd <= 0 && slime.frozen <= 0 && !savingForUlt) {
-      castMoral(false);
+    } else if (S.moral.cd <= 0 && slime.frozen <= 0) {
+      const dist = Math.hypot(rabbit.x - slime.x, rabbit.y - slime.y);
+      const watchUlt = !R.ultUsed && rabbit.hp <= rabbit.maxHp * M.watchHp;  // 等大招对轴
+      const swinging = R.on && !R.hitDone && dist <= M.threatRange;          // 锤子正抡过来
+      const lowHp = slime.hp <= slime.maxHp * M.lowHp;                       // 自己快死了
+      const forced = S.moral.readyFor >= M.holdMax;                          // 留太久，必须用掉
+
+      if (forced) castMoral(false);
+      else if (watchUlt) { /* 继续留着接大招 */ }
+      else if (swinging || lowHp) castMoral(false);
     }
 
+    // ================= 历史的回眸的释放判断 =================
+    // 要"吃到足够多的伤害"才值得放（放了要停手 10s，乱放等于自废武功）
     if (S.history.mute > 0) S.history.mute = Math.max(0, S.history.mute - dt);
     if (S.history.cd <= 0 && S.history.mute <= 0 && slime.frozen <= 0) {
-      if (takenBetween(slime, 0, Hc.lookBack) >= slime.maxHp * Hc.needRatio) castHistory();
+      const recent = takenBetween(slime, 0, Hc.lookBack);
+      const worth = recent >= slime.maxHp * Hc.needRatio;                 // 值得
+      const forced = S.history.readyFor >= Hc.holdMax
+                     && recent >= slime.maxHp * Hc.floorRatio;            // 留满后的保底
+      if (worth || forced) castHistory();
     }
 
     if (slime.stun > 0 || slime.frozen > 0 || S.history.mute > 0) return;
@@ -1485,11 +1510,13 @@
     const M = CFG.slime.moral;
     if (S.moral.air > 0) setSkill('skMoral', 'active', '浮空免疫', S.moral.air.toFixed(1) + 's', S.moral.air / M.air);
     else if (S.moral.cd > 0) setSkill('skMoral', '', '冷却', S.moral.cd.toFixed(1) + 's', 1 - S.moral.cd / M.cd);
+    else if (S.moral.readyFor > 0.4) setSkill('skMoral', 'ready', '留招', S.moral.readyFor.toFixed(0) + 's', 1 - S.moral.readyFor / M.holdMax);
     else setSkill('skMoral', 'ready', '就绪', '✓', 1);
 
     const Hc = CFG.slime.history;
     if (S.history.mute > 0) setSkill('skHistory', 'active', '停手中', S.history.mute.toFixed(1) + 's', 1 - S.history.mute / Hc.mute);
     else if (S.history.cd > 0) setSkill('skHistory', '', '冷却', S.history.cd.toFixed(1) + 's', 1 - S.history.cd / Hc.cd);
+    else if (S.history.readyFor > 0.4) setSkill('skHistory', 'ready', '留招', S.history.readyFor.toFixed(0) + 's', 1 - S.history.readyFor / Hc.holdMax);
     else setSkill('skHistory', 'ready', '就绪', '✓', 1);
 
     if (drawerOn) updateDetail();
@@ -1615,8 +1642,8 @@
         hp: [Math.round(rabbit.hp), Math.round(slime.hp)],
         dealt: [Math.round(rabbit.dealt), Math.round(slime.dealt)],
         ult: R.ultUsed, iceT: +R.iceT.toFixed(2), freezeT: +R.freezeT.toFixed(2),
-        moral: { cd: +S.moral.cd.toFixed(1), air: +S.moral.air.toFixed(1) },
-        history: { cd: +S.history.cd.toFixed(1), mute: +S.history.mute.toFixed(1) },
+        moral: { cd: +S.moral.cd.toFixed(1), air: +S.moral.air.toFixed(1), wait: +S.moral.readyFor.toFixed(1) },
+        history: { cd: +S.history.cd.toFixed(1), mute: +S.history.mute.toFixed(1), wait: +S.history.readyFor.toFixed(1) },
         blobs: blobs.length
       };
     }
