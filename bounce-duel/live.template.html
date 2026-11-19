@@ -26,7 +26,8 @@
     rabbit.ult.freeze           冰冻时长（3 秒）
     rabbit.ult.iceDur           冰岛背景持续（3.4 秒）
     rabbit.ult.uses             全局可释放次数（3）
-    rabbit.ult.dmgAtkRatio      大招伤害 = 该值 × 基础攻击（1.00 → 3000 ≈ 30% 生命）
+    rabbit.ult.dmgAtkRatio      大招总伤害 = 该值 × 基础攻击（1.00 → 3000 ≈ 30% 生命）
+    rabbit.ult.ticks / tickGap  持续伤害段数 / 间隔（6 段 × 500，每 0.5s 跳一次）
     rabbit.ult.healRatio        释放瞬间回血 = 该值 × 此前累计造成的伤害（0.30）
     slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力（13500 / 3000，比兔子高 35% 用来吃 3 次大招）
     slime.spit.period           几秒喷一组（2.6）
@@ -434,7 +435,9 @@
         lockDur: 2.0,        // 锁血 2 秒（期间不掉血）
         freeze: 3.0,         // 冰冻 3 秒（双方面对面对峙，停止运动）
         iceDur: 3.4,         // 冰岛背景持续时间，结束后关闭
-        dmgAtkRatio: 1.00,   // 冰岛冲击伤害 = 1.00 × 基础攻击 = 3000 ≈ 对方 30% 生命
+        dmgAtkRatio: 1.00,   // 冰岛冲击总伤害 = 1.00 × 基础攻击 = 3000 ≈ 对方 30% 生命
+        ticks: 6,            // 在持续时间内分 6 段结算（总伤害不变，单段更小）
+        tickGap: 0.5,        // 每段间隔 0.5s（6 段 × 0.5s ≈ 覆盖冰冻的 3s）
         healRatio: 0.30,     // 释放瞬间回血 = 30% × 此前累计造成的伤害
         stun: 1.2
       }
@@ -945,13 +948,33 @@
         }
       });
     } else {
-      pending.push({
-        at: clock + 0.55, gen,
-        fn: () => {
-          damage(slime, atkDmg(rabbit, U.dmgAtkRatio), { source: rabbit, color: '#8fd8ff' });
-          if (slime.hp > 0) slime.stun = Math.max(slime.stun, U.stun);
-        }
-      });
+      // 冰岛冲击：冰冻期间分多次结算，单段伤害小、总伤害不变
+      const total = atkDmg(rabbit, U.dmgAtkRatio);
+      const per = Math.ceil(total / U.ticks);
+      for (let i = 0; i < U.ticks; i++) {
+        pending.push({
+          at: clock + 0.55 + i * U.tickGap, gen,
+          fn: () => {
+            if (over) return;
+            const dealt = damage(slime, per, { source: rabbit, color: '#8fd8ff' });
+            if (dealt > 0) {
+              fx.rings.push({
+                x: slime.x, y: slime.y, t: 0, dur: 0.32,
+                r0: 8, r1: 78, color: '#b9ecff', w: 2.6
+              });
+              for (let k = 0; k < 6; k++) {
+                const a = Math.PI * 2 * k / 6 + Math.random() * 0.5;
+                fx.shards.push({
+                  x: slime.x + Math.cos(a) * 40, y: slime.y + Math.sin(a) * 40,
+                  tx: slime.x, ty: slime.y, t: 0, dur: 0.3, color: '#cdefff'
+                });
+              }
+            }
+            // 眩晕只上第一次
+            if (i === 0 && slime.hp > 0) slime.stun = Math.max(slime.stun, U.stun);
+          }
+        });
+      }
     }
   }
 
@@ -1697,8 +1720,8 @@
       + skillCard('skHammer', ICON.hammer, '巨锤环绕',
           fmt(atkDmg(rabbit, CFG.rabbit.dmgAtkRatio)) + ' 伤害 · ' + CFG.rabbit.hammer.period + 's 一圈')
       + skillCard('skUlt', ICON.ice, '冰岛冲击',
-          fmt(atkDmg(rabbit, CFG.rabbit.ult.dmgAtkRatio)) + ' 伤害 · 回血 '
-          + Math.round(CFG.rabbit.ult.healRatio * 100) + '%')
+          fmt(atkDmg(rabbit, CFG.rabbit.ult.dmgAtkRatio)) + ' · '
+          + CFG.rabbit.ult.ticks + ' 段 · 回血 ' + Math.round(CFG.rabbit.ult.healRatio * 100) + '%')
       + '</div>'
       + '<div class="detail" id="detailA"></div>'
       + '</div>';
