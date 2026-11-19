@@ -29,7 +29,7 @@
     rabbit.ult.dmgAtkRatio      大招总伤害 = 该值 × 基础攻击（1.00 → 3000 ≈ 30% 生命）
     rabbit.ult.ticks / tickGap  持续伤害段数 / 间隔（6 段 × 500，每 0.5s 跳一次）
     rabbit.ult.healRatio        释放瞬间回血 = 该值 × 此前累计造成的伤害（0.30）
-    slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力（13500 / 3000，比兔子高 35% 用来吃 3 次大招）
+    slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力（13150 / 3000，比兔子高 31.5% 用来吃 3 次大招）
     slime.spit.period           几秒喷一组（2.6）
     slime.spit.dmgAtkRatio      单球伤害 = 该值 × 基础攻击（0.85 → 2550 ≈ 25.5% 生命）
     slime.spit.speed            球速（430），越大越准
@@ -38,6 +38,8 @@
     slime.moral.counterChance   大招对轴成功概率（0.45）
     slime.moral.holdMax         技能就绪后最多留多久（20 秒）
     slime.history.cd / mute     历史的回眸 冷却 / 停手（15 / 10）
+    slime.history.healRatio     回血 = 上一个 10s 窗口承伤的 35%
+    slime.history.reflectRatio  反弹 = 最近 10s 窗口承伤的 20%
     slime.history.needRatio     最近 10s 承伤超过多少才值得放（0.12）
 
   【语音播报】
@@ -445,9 +447,9 @@
 
     // ---- 史莱姆 ----
     slime: {
-      // 基础生命比兔子高 35%（13500 / 10000）：兔子多出 3 次冰岛冲击（共 3×3000）
+      // 基础生命比兔子高 31.5%（13150 / 10000）：兔子多出 3 次冰岛冲击（共 3×3000）
       // 和 3 次锁血，史莱姆只能靠血量和吸血硬吃，这一项是平衡的核心旋钮
-      maxHp: 13500,
+      maxHp: 13150,
       atk: 3000,
       speed: [180, 320],
 
@@ -481,7 +483,7 @@
       history: {
         cd: 15,              // 冷却 15s
         lookBack: 10,        // 回看窗口（秒）
-        healRatio: 0.30,     // 回「上一个 10s 窗口承伤」的 30%
+        healRatio: 0.35,     // 回「上一个 10s 窗口承伤」的 35%（v2.11 +5 个点）
         reflectRatio: 0.20,  // 把「本 10s 窗口承伤」的 20% 打回去
         mute: 10,            // 施放后停手 10s
         needRatio: 0.12,     // 最近 10s 承伤 >= 12% 最大生命才值得放
