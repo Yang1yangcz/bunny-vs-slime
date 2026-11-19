@@ -28,11 +28,11 @@
     rabbit.ult.uses             全局可释放次数（3）
     rabbit.ult.dmgAtkRatio      大招伤害 = 该值 × 基础攻击（1.00 → 3000 ≈ 30% 生命）
     rabbit.ult.healRatio        释放瞬间回血 = 该值 × 此前累计造成的伤害（0.30）
-    slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力（12500 / 3000，比兔子高 25% 用来吃 3 次大招）
+    slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力（13500 / 3000，比兔子高 35% 用来吃 3 次大招）
     slime.spit.period           几秒喷一组（2.6）
     slime.spit.dmgAtkRatio      单球伤害 = 该值 × 基础攻击（0.85 → 2550 ≈ 25.5% 生命）
     slime.spit.speed            球速（430），越大越准
-    slime.lifestealAtk          命中吸血 = 该值 × 基础攻击（0.10 → 300）
+    slime.lifestealRatio        命中吸血 = 向上取整(实际伤害 × 该值)（0.10 → 约 255/次）
     slime.moral.cd / air        道德制高点 冷却 / 浮空时长（30 / 5）
     slime.moral.counterChance   大招对轴成功概率（0.45）
     slime.moral.holdMax         技能就绪后最多留多久（20 秒）
@@ -442,9 +442,9 @@
 
     // ---- 史莱姆 ----
     slime: {
-      // 基础生命比兔子高 25%：兔子多出 3 次冰岛冲击（共 3×3000）和 3 次锁血，
-      // 史莱姆只能靠血量和吸血硬吃，这一项是平衡的核心旋钮（10000 → 兔子碾压）
-      maxHp: 12500,
+      // 基础生命比兔子高 35%（13500 / 10000）：兔子多出 3 次冰岛冲击（共 3×3000）
+      // 和 3 次锁血，史莱姆只能靠血量和吸血硬吃，这一项是平衡的核心旋钮
+      maxHp: 13500,
       atk: 3000,
       speed: [180, 320],
 
@@ -459,7 +459,8 @@
         maxBlobs: 8
       },
 
-      lifestealAtk: 0.10,    // 命中吸血 = 0.10 × 基础攻击 = 300
+      // 命中吸血 = 向上取整(实际造成的伤害 × 10%)，打多少回多少，被免疫则为 0
+      lifestealRatio: 0.10,
 
       // ---- 技能一：站在道德制高点 ----
       moral: {
@@ -1080,7 +1081,7 @@
         const dealt = damage(rabbit, atkDmg(slime, CFG.slime.spit.dmgAtkRatio), { source: slime, color: '#2f9e3f' });
         if (dealt > 0) {
           slime.hits++;
-          heal(slime, atkDmg(slime, CFG.slime.lifestealAtk), '#2f9e3f');
+          heal(slime, Math.ceil(dealt * CFG.slime.lifestealRatio), '#2f9e3f');
         }
         blobs.splice(i, 1);
         continue;
@@ -1822,7 +1823,8 @@
       + rowBar('生命', slime.hp / slime.maxHp, fmt(slime.hp) + ' / ' + fmt(slime.maxHp))
       + rowBar('单球伤害', CFG.slime.spit.dmgAtkRatio, fmt(atkDmg(slime, CFG.slime.spit.dmgAtkRatio)))
       + kv('基础攻击', fmt(slime.atk))
-      + kv('命中吸血', fmt(atkDmg(slime, CFG.slime.lifestealAtk)) + ' / 次')
+      + kv('命中吸血', Math.round(CFG.slime.lifestealRatio * 100) + '% 伤害 · 约 '
+          + fmt(Math.ceil(atkDmg(slime, CFG.slime.spit.dmgAtkRatio) * CFG.slime.lifestealRatio)) + ' / 次')
       + kv('状态', tagOf(slime))
       + kv('输出 / 承伤', fmt(slime.dealt) + ' / ' + fmt(slime.taken))
       + kv('命中次数', slime.hits + ' 次')
