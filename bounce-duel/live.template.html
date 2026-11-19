@@ -29,15 +29,15 @@
     rabbit.ult.dmgAtkRatio      大招总伤害 = 该值 × 基础攻击（1.00 → 3000 ≈ 30% 生命）
     rabbit.ult.ticks / tickGap  持续伤害段数 / 间隔（6 段 × 500，每 0.5s 跳一次）
     rabbit.ult.healRatio        释放瞬间回血 = 该值 × 此前累计造成的伤害（0.30）
-    slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力（13150 / 3000，比兔子高 31.5% 用来吃 3 次大招）
-    slime.spit.period           几秒喷一组（2.6）
-    slime.spit.dmgAtkRatio      单球伤害 = 该值 × 基础攻击（0.85 → 2550 ≈ 25.5% 生命）
+    slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力（12700 / 3000，比兔子高 27% 用来吃 3 次大招）
+    slime.spit.period           几秒喷一组（3.0）
+    slime.spit.dmgAtkRatio      单球伤害 = 该值 × 基础攻击（0.62 → 1860 ≈ 18.6% 生命）
     slime.spit.speed            球速（430），越大越准
     slime.lifestealRatio        命中吸血 = 向上取整(实际伤害 × 该值)（0.10 → 约 255/次）
     slime.moral.cd / air        道德制高点 冷却 / 浮空时长（30 / 5）
     slime.moral.counterChance   大招对轴成功概率（0.45）
     slime.moral.holdMax         技能就绪后最多留多久（20 秒）
-    slime.history.cd / mute     历史的回眸 冷却 / 停手（15 / 10）
+    slime.history.cd / mute     历史的回眸 冷却 / 停手（15 / 5）
     slime.history.healRatio     回血 = 上一个 10s 窗口承伤的 35%
     slime.history.reflectRatio  反弹 = 最近 10s 窗口承伤的 20%
     slime.history.needRatio     最近 10s 承伤超过多少才值得放（0.12）
@@ -447,16 +447,16 @@
 
     // ---- 史莱姆 ----
     slime: {
-      // 基础生命比兔子高 31.5%（13150 / 10000）：兔子多出 3 次冰岛冲击（共 3×3000）
+      // 基础生命比兔子高 27%（12700 / 10000）：兔子多出 3 次冰岛冲击（共 3×3000）
       // 和 3 次锁血，史莱姆只能靠血量和吸血硬吃，这一项是平衡的核心旋钮
-      maxHp: 13150,
+      maxHp: 12700,
       atk: 3000,
       speed: [180, 320],
 
       spit: {
-        period: 2.6,         // 每 2.6s 喷一组（兔子有大招后要这个频率才打得动）
+        period: 3.0,         // 每 3.0s 喷一组（停手从 10s 降到 5s，出手更密，单组伤害相应调低）
         chain: 0.34,         // 两连喷的间隔
-        dmgAtkRatio: 0.85,   // 单球伤害 = 0.85 × 基础攻击 = 2550 ≈ 对方 25.5% 生命
+        dmgAtkRatio: 0.62,   // 单球伤害 = 0.62 × 基础攻击 = 1860 ≈ 对方 18.6% 生命
         speed: 430,
         r: 33, miniR: 23,
         life: 14,
@@ -485,7 +485,7 @@
         lookBack: 10,        // 回看窗口（秒）
         healRatio: 0.35,     // 回「上一个 10s 窗口承伤」的 35%（v2.11 +5 个点）
         reflectRatio: 0.20,  // 把「本 10s 窗口承伤」的 20% 打回去
-        mute: 10,            // 施放后停手 10s
+        mute: 5,             // 施放后停手 5s（v2.12：10 → 5）
         needRatio: 0.12,     // 最近 10s 承伤 >= 12% 最大生命才值得放
         floorRatio: 0.03,    // 留满 20s 后的保底门槛：至少吃到 3% 伤害才放
         holdMax: 20,         // 就绪后最多再留 20s
@@ -1977,7 +1977,11 @@
   window.__sim = {
     pause() { paused = true; },
     resume() { paused = false; last = performance.now(); acc = 0; },
-    advance(sec) { for (let i = 0; i < sec * 60; i++) update(1 / 60); render(); updateUI(1); },
+    // silent=true 时只推进逻辑、不渲染，用于批量模拟
+    advance(sec, silent) {
+      for (let i = 0; i < sec * 60; i++) update(1 / 60);
+      if (!silent) { render(); updateUI(1); }
+    },
     state() {
       return {
         clock, over,

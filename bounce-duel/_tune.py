@@ -38,8 +38,11 @@ def set_path_js(path, val):
 
 def main():
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 9
+    rnd = '--rand' in sys.argv
     overrides = []
     for a in sys.argv[2:]:
+        if a.startswith('--'):
+            continue
         if '=' not in a:
             continue
         k, v = a.split('=', 1)
@@ -74,14 +77,15 @@ def main():
             print('覆盖参数:', ', '.join('%s=%s' % kv for kv in overrides))
 
         for i in range(n):
-            drv.eval('__seed(%d)' % (i * 7919 + 13))
+            if not rnd:
+                drv.eval('__seed(%d)' % (i * 7919 + 13))
             drv.eval("document.getElementById('btnReset').click()")
             for path, val in overrides:
                 drv.eval(set_path_js(path, val))
             t = 0.0
             st = None
             while t < MAX_SIM:
-                drv.eval('__sim.advance(0.5)')
+                drv.eval('__sim.advance(0.5, true)')
                 t += 0.5
                 st = json.loads(drv.eval('JSON.stringify(__sim.state())'))
                 if st['over']:
