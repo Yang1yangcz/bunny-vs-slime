@@ -38,12 +38,12 @@
     overflow-x:hidden;
   }
   .app{
-    max-width:1480px;margin:0 auto;padding:14px 20px 22px;
+    max-width:1760px;margin:0 auto;padding:16px 26px 26px;
     min-height:100vh;display:flex;flex-direction:column;gap:10px;
   }
 
   .title{
-    margin:0;text-align:center;font-size:clamp(24px,3.2vw,38px);font-weight:900;
+    margin:0;text-align:center;font-size:clamp(30px,3.6vw,50px);font-weight:900;
     letter-spacing:.06em;color:var(--ink);
     text-shadow:0 2px 0 rgba(255,255,255,.75);
     line-height:1.1;
@@ -53,11 +53,13 @@
     margin:0 .42em;letter-spacing:.02em;
   }
 
+  /* 用 flex 让左右 HUD 紧贴画框，而不是被网格撑到大屏两端 */
   .board{
-    display:grid;grid-template-columns:228px minmax(0,1fr) 228px;
-    gap:14px;align-items:center;flex:1;min-height:0;
+    display:flex;justify-content:center;align-items:center;
+    gap:20px;flex:1;min-height:0;
   }
-  .stage-wrap{display:flex;justify-content:center;align-items:center;min-width:0}
+  .hud{width:270px;flex:none}
+  .stage-wrap{display:flex;justify-content:center;align-items:center;min-width:0;flex:1 1 auto}
   .stage{
     position:relative;background:var(--sky);border:7px solid var(--ink);
     box-shadow:0 10px 0 rgba(10,42,63,.16), 0 18px 40px rgba(10,42,63,.20);
@@ -76,36 +78,36 @@
     width:38px;height:38px;border:2px solid var(--ink);border-radius:9px;
     object-fit:cover;background:#cfe9f7;flex:none;
   }
-  .who{font-size:15px;font-weight:900;line-height:1.1}
-  .who small{display:block;font-size:10.5px;font-weight:600;color:var(--ink-soft);margin-top:3px}
+  .who{font-size:18px;font-weight:900;line-height:1.1}
+  .who small{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-top:4px}
 
-  .bar{height:13px;margin:0 10px;border:2px solid var(--ink);border-radius:7px;background:#fff;overflow:hidden;position:relative}
+  .bar{height:17px;margin:0 12px;border:2px solid var(--ink);border-radius:7px;background:#fff;overflow:hidden;position:relative}
   .bar i{display:block;height:100%;width:100%;background:linear-gradient(180deg,#ff6a5a,var(--blood));transition:width .12s linear}
   .bar b{
     position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    font-size:10px;font-weight:900;color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.55);
+    font-size:11.5px;font-weight:900;color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.55);
     letter-spacing:.02em;
   }
-  .stat{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-soft);padding:4px 12px 0;font-variant-numeric:tabular-nums}
+  .stat{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);padding:5px 14px 0;font-variant-numeric:tabular-nums}
 
   .skills{padding:8px 8px 9px;display:flex;flex-direction:column;gap:7px}
   .sk{
-    display:grid;grid-template-columns:34px 1fr;gap:8px;align-items:center;
+    display:grid;grid-template-columns:42px 1fr;gap:9px;align-items:center;
     border:2px solid rgba(10,42,63,.16);border-radius:9px;padding:6px;background:#f7fcff;
     transition:border-color .12s ease, background .12s ease;
   }
   .sk.ready{border-color:rgba(34,160,74,.5);background:#f3fdf6}
   .sk.active{border-color:var(--violet);background:#f8f4ff}
   .sk.lock{border-color:var(--blood);background:#fff4f3}
-  .sk-ico{width:34px;height:34px;display:block}
+  .sk-ico{width:42px;height:42px;display:block}
   .sk-ico svg{width:100%;height:100%;display:block}
   .sk-main{min-width:0}
-  .sk-name{font-size:11.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .sk-line{display:flex;justify-content:space-between;gap:6px;font-size:10px;font-weight:700;color:var(--ink-soft);margin-top:2px;font-variant-numeric:tabular-nums}
+  .sk-name{font-size:13.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sk-line{display:flex;justify-content:space-between;gap:6px;font-size:12px;font-weight:700;color:var(--ink-soft);margin-top:2px;font-variant-numeric:tabular-nums}
   .sk.ready .sk-line b{color:#1c8b45}
   .sk.active .sk-line b{color:var(--violet)}
   .sk.lock .sk-line b{color:var(--blood)}
-  .sk-bar{height:5px;border-radius:3px;background:#dce9f1;margin-top:4px;overflow:hidden}
+  .sk-bar{height:6px;border-radius:3px;background:#dce9f1;margin-top:4px;overflow:hidden}
   .sk-bar i{display:block;height:100%;width:100%;background:var(--sky);transition:width .1s linear}
   .sk.ready .sk-bar i{background:#35b45f}
   .sk.active .sk-bar i{background:var(--violet)}
@@ -113,7 +115,7 @@
 
   .toolbar{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
   button{
-    font:inherit;font-size:13px;font-weight:900;color:var(--ink);
+    font:inherit;font-size:15px;font-weight:900;color:var(--ink);
     background:#fff;border:3px solid var(--ink);border-radius:11px;
     padding:7px 16px;cursor:pointer;box-shadow:0 4px 0 var(--ink);
     transition:transform .07s ease, background .15s ease;
@@ -124,29 +126,29 @@
 
   .drawer{
     display:none;position:fixed;left:0;right:0;bottom:0;z-index:60;
-    max-width:1480px;margin:0 auto;max-height:46vh;overflow:auto;
+    max-width:1760px;margin:0 auto;max-height:46vh;overflow:auto;
     background:#eaf6fd;border:3px solid var(--ink);border-bottom:0;
     border-radius:14px 14px 0 0;box-shadow:0 -10px 30px rgba(10,42,63,.25);
   }
   .drawer.show{display:block}
   body.drawer-open .board{align-items:flex-start}
   .drawer h2{
-    margin:0;padding:9px 14px;font-size:12.5px;letter-spacing:.08em;
+    margin:0;padding:11px 16px;font-size:15px;letter-spacing:.08em;
     background:var(--ink);color:#fff;position:sticky;top:0;z-index:2;
   }
   .cols{display:grid;grid-template-columns:1fr 1fr}
   .col{padding:10px 14px 14px}
   .col+.col{border-left:2px dashed rgba(10,42,63,.18)}
-  .col h3{margin:0 0 8px;font-size:12px;color:var(--ink)}
-  .row{display:grid;grid-template-columns:92px 1fr auto;gap:8px;align-items:center;font-size:11.5px;padding:3px 0}
+  .col h3{margin:0 0 10px;font-size:16px;color:var(--ink)}
+  .row{display:grid;grid-template-columns:118px 1fr auto;gap:10px;align-items:center;font-size:14px;padding:5px 0}
   .row .k{color:var(--ink-soft);font-weight:700}
-  .row .bar2{height:9px;border:2px solid var(--ink);border-radius:5px;background:#fff;overflow:hidden;min-width:70px}
+  .row .bar2{height:11px;border:2px solid var(--ink);border-radius:5px;background:#fff;overflow:hidden;min-width:70px}
   .row .bar2 i{display:block;height:100%;background:linear-gradient(180deg,#ff6a5a,var(--blood));transition:width .12s linear}
   .row .v{font-variant-numeric:tabular-nums;font-weight:800;white-space:nowrap}
-  .tag{display:inline-block;padding:1px 7px;border-radius:6px;font-size:10.5px;font-weight:900;border:2px solid currentColor}
+  .tag{display:inline-block;padding:2px 9px;border-radius:7px;font-size:12.5px;font-weight:900;border:2px solid currentColor}
   .t-ok{color:#1c8b45} .t-cd{color:var(--ink-soft)} .t-on{color:var(--violet)} .t-lock{color:var(--blood)}
 
-  .params{display:none;position:fixed;left:0;right:0;bottom:0;z-index:61;max-width:1480px;margin:0 auto;
+  .params{display:none;position:fixed;left:0;right:0;bottom:0;z-index:61;max-width:1760px;margin:0 auto;
     max-height:58vh;overflow:auto;background:#0a2a3f;color:#d7ecf7;border-radius:14px 14px 0 0;
     box-shadow:0 -10px 30px rgba(10,42,63,.35);font-size:11.5px}
   .params.show{display:block}
@@ -170,17 +172,58 @@
     opacity:0;transition:opacity .18s ease;
   }
   .banner.show{opacity:1}
-  .verdict{
-    position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;
-    background:rgba(6,30,46,.5);font-size:clamp(28px,4vw,52px);font-weight:900;color:#fff;letter-spacing:.08em;
-    text-shadow:0 4px 0 rgba(0,0,0,.3);z-index:5;
+  /* ---------- 结算：K.O. + MVP ---------- */
+  .overlay{
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;
+    z-index:9;background:radial-gradient(circle at 50% 45%, rgba(6,30,46,.62), rgba(4,18,28,.92));
+    backdrop-filter:blur(1px);cursor:pointer;
   }
-  .verdict.show{display:flex}
-  .verdict small{font-size:14px;font-weight:700;letter-spacing:.02em;opacity:.92}
+  .overlay.show{display:flex}
+  .ko{
+    font-size:clamp(76px,12vw,170px);font-weight:900;letter-spacing:.06em;color:#fff;line-height:1;
+    /* 用多层阴影做硬描边：-webkit-text-stroke 会盖住字芯，HTML 文字不能用 */
+    text-shadow:
+      4px 4px 0 var(--ink), -4px 4px 0 var(--ink),
+      4px -4px 0 var(--ink), -4px -4px 0 var(--ink),
+      0 4px 0 var(--ink), 0 -4px 0 var(--ink),
+      4px 0 0 var(--ink), -4px 0 0 var(--ink),
+      0 14px 0 rgba(10,42,63,.7),
+      0 0 48px rgba(143,216,255,.9),
+      0 0 96px rgba(255,90,60,.65);
+    opacity:0;transform:scale(2.6) rotate(-6deg);display:none;
+  }
+  .ko.show{display:block;animation:koSlam .5s cubic-bezier(.16,.9,.28,1) forwards}
+  @keyframes koSlam{
+    0%{opacity:0;transform:scale(2.6) rotate(-6deg);filter:blur(8px)}
+    60%{opacity:1;transform:scale(.94) rotate(1deg);filter:blur(0)}
+    100%{opacity:1;transform:scale(1) rotate(0)}
+  }
+  .mvp{
+    display:none;width:min(780px,92%);background:#eaf6fd;border:5px solid var(--ink);border-radius:20px;
+    box-shadow:0 10px 0 var(--ink);padding:20px 22px 22px;text-align:left;
+  }
+  .mvp.show{display:block;animation:mvpIn .34s ease both}
+  @keyframes mvpIn{from{opacity:0;transform:translateY(18px) scale(.97)}to{opacity:1;transform:none}}
+  .mvp-top{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+  .mvp-ava{width:96px;height:96px;border:3px solid var(--ink);border-radius:14px;object-fit:cover;background:#cfe9f7}
+  .mvp-name{font-size:36px;font-weight:900;line-height:1.1}
+  .mvp-badge{
+    display:inline-block;background:var(--gold);border:3px solid var(--ink);border-radius:10px;
+    padding:2px 13px;font-size:17px;font-weight:900;margin-left:10px;vertical-align:middle;
+    box-shadow:0 3px 0 var(--ink);
+  }
+  .mvp-sub{font-size:15px;color:var(--ink-soft);font-weight:700;margin-top:4px}
+  .mvp-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 26px}
+  .mvp-row{display:flex;justify-content:space-between;align-items:baseline;font-size:16.5px;font-weight:700;
+    border-bottom:1px dashed rgba(10,42,63,.16);padding:6px 0}
+  .mvp-row span{color:var(--ink-soft)}
+  .mvp-row b{font-variant-numeric:tabular-nums;font-size:17.5px}
+  .mvp-actions{margin-top:18px;text-align:center}
+  .mvp-hint{margin-top:10px;text-align:center;font-size:12.5px;color:var(--ink-soft);font-weight:700}
 
   @media (max-width:1120px){
-    .board{grid-template-columns:1fr}
-    .hud{flex-direction:row;flex-wrap:wrap}
+    .board{flex-direction:column;align-items:stretch}
+    .hud{width:auto;flex-direction:row;flex-wrap:wrap}
     .card{flex:1 1 300px}
     .cols{grid-template-columns:1fr}
     .col+.col{border-left:0;border-top:2px dashed rgba(10,42,63,.18)}
@@ -198,7 +241,10 @@
       <div class="stage" id="stage">
         <canvas id="cv"></canvas>
         <div class="banner" id="banner"></div>
-        <div class="verdict" id="verdict"></div>
+        <div class="overlay" id="overlay">
+          <div class="ko" id="koText">K.O.</div>
+          <div class="mvp" id="mvpCard"></div>
+        </div>
         <div class="sound-hint" id="soundHint">点击画面开启音效</div>
       </div>
     </div>
@@ -234,7 +280,7 @@
 
     // ---- 场地 ----
     arena: {
-      w: 960, h: 720,        // 逻辑画布尺寸（4:3）
+      w: 1080, h: 740,       // 逻辑画布尺寸（约 3:2，比之前更大）
       border: 6              // 角色离边框的最小距离
     },
 
@@ -280,7 +326,7 @@
         period: 4.7,         // 每 4.7s 喷一组
         chain: 0.34,         // 两连喷的间隔
         dmgRatio: 0.21,      // 单球伤害 = 21% × 对方最大生命 = 2100
-        speed: 380,
+        speed: 430,
         r: 33, miniR: 23,
         life: 14,
         split: 2,            // 第二颗撞上第一颗 → 分裂成 2 个
@@ -474,12 +520,26 @@
     tone('sine', 2100, 3200, t + 0.1, 0.7, 0.05);
   }
 
+  // K.O. 重音：双低频下坠 + 冲击噪声 + 金属余响
   function sfxKO() {
     if (!SFX.ctx) return;
     const t = SFX.ctx.currentTime;
-    tone('sine', 120, 32, t, 0.8, 0.8);
-    burst(t, 0.6, 'lowpass', 3600, 420, 0.7, 0.5);
-    tone('triangle', 1560, 520, t, 0.35, 0.12);
+    tone('sine', 95, 26, t, 1.15, 0.95);
+    tone('sine', 58, 20, t + 0.012, 1.25, 0.8);
+    burst(t, 0.85, 'lowpass', 2800, 160, 0.7, 0.62);
+    burst(t + 0.02, 0.25, 'highpass', 2200, 6000, 0.8, 0.18);
+    tone('triangle', 1800, 560, t + 0.03, 0.5, 0.12);
+  }
+
+  // MVP 结算的小号角
+  function sfxWin() {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+      tone('triangle', f, f, t + i * 0.12, 0.55, 0.13);
+      tone('sine', f / 2, f / 2, t + i * 0.12, 0.55, 0.07);
+    });
+    burst(t + 0.36, 0.5, 'highpass', 4000, 8000, 0.6, 0.08);
   }
 
   // ==========================================================================
@@ -499,7 +559,7 @@
     const fit = () => {
       const iw = im.naturalWidth, ih = im.naturalHeight;
       if (!iw) return;
-      const maxSide = (side === 'left' ? 182 : 196) * 1.10;
+      const maxSide = (side === 'left' ? 198 : 214) * 1.10;
       const s = maxSide / Math.max(iw, ih);
       f.dw = iw * s; f.dh = ih * s;
       f.hw = f.dw / 2; f.hh = f.dh / 2;
@@ -514,6 +574,7 @@
   const fighters = [rabbit, slime];
 
   let clock = 0, over = null, blobs = [], pending = [], gen = 0;
+  let overT = 0, mvpOn = false;
   const fx = { nums: [], rings: [], sparks: [], snow: [], shards: [] };
 
   const R = {
@@ -580,7 +641,12 @@
     S.history.cd = CFG.slime.history.startCd; S.history.mute = 0; S.history.readyFor = 0;
     S.lastHeal = 0; S.lastReflect = 0;
 
-    document.getElementById('verdict').classList.remove('show');
+    overT = 0; mvpOn = false;
+    document.getElementById('overlay').classList.remove('show');
+    document.getElementById('koText').classList.remove('show');
+    const _mvp = document.getElementById('mvpCard');
+    _mvp.classList.remove('show');
+    _mvp.innerHTML = '';
     showBanner('');
   }
 
@@ -647,8 +713,10 @@
 
     if (target.hp <= 0) {
       over = target === rabbit ? 'slime' : 'rabbit';
+      overT = 0; mvpOn = false;
       sfxKO();
-      showVerdict(over);
+      shake(3.2);
+      showKO();
     }
     return real;
   }
@@ -798,8 +866,8 @@
       let px = rabbit.x, py = rabbit.y;
       for (let k = 0; k < 2; k++) {
         const tt = Math.hypot(px - mx, py - my) / SP.speed;
-        px = rabbit.x + rabbit.vx * tt * 0.85;
-        py = rabbit.y + rabbit.vy * tt * 0.85;
+        px = rabbit.x + rabbit.vx * tt * 1.0;
+        py = rabbit.y + rabbit.vy * tt * 1.0;
       }
       px = clamp(px, BORDER + 20, W - BORDER - 20);
       py = clamp(py, BORDER + 20, H - BORDER - 20);
@@ -1031,7 +1099,11 @@
   //  ⑩  主循环
   // ==========================================================================
   function update(dt) {
-    if (over) return;
+    if (over) {
+      overT += dt;
+      if (!mvpOn && overT >= 1.4) { mvpOn = true; showMVP(); }
+      return;
+    }
     clock += dt;
 
     if (R.freezeT > 0) {
@@ -1304,7 +1376,7 @@
   }
 
   function drawHp(f) {
-    const s = 70, th = 0.46;
+    const s = 80, th = 0.46;
     const floatY = f.sky > 0 ? -56 : 0;
     let cy = f.y + floatY - f.hh - s / 2 - 10;
     if (cy - s / 2 < 6) cy = f.y + floatY + f.hh + s / 2 + 12;
@@ -1593,16 +1665,69 @@
     bannerT = 1.1;
   }
 
-  function showVerdict(who) {
-    const el = document.getElementById('verdict');
-    el.innerHTML = '<div>' + (who === 'rabbit' ? '兔子' : '史莱姆') + ' 获胜</div>'
-      + '<small>' + clock.toFixed(1) + ' 秒 · 点「重新开局」再来一局</small>';
-    el.classList.add('show');
+  // 死亡瞬间：黑场 + 大字 K.O.
+  function showKO() {
+    showBanner('');
+    const ov = document.getElementById('overlay');
+    const ko = document.getElementById('koText');
+    const mvp = document.getElementById('mvpCard');
+    mvp.classList.remove('show');
+    mvp.innerHTML = '';
+    ko.classList.remove('show');
+    ov.classList.add('show');
+    void ko.offsetWidth;          // 强制重排，动画才会重新播
+    ko.classList.add('show');
+  }
+
+  // 1.4s 后：MVP 结算卡
+  function showMVP() {
+    const win = over === 'rabbit' ? rabbit : slime;
+    const name = over === 'rabbit' ? '兔子' : '史莱姆';
+    const ava = over === 'rabbit' ? IMG_SRC.a : IMG_SRC.b;
+    const rate = Math.round(win.hp / win.maxHp * 100);
+    const dps = Math.round(win.dealt / Math.max(1, clock));
+    const heal = win === slime ? fmt(win.healed) : '—';
+
+    const rows = [
+      ['剩余生命', fmt(win.hp) + ' / ' + fmt(win.maxHp) + '（' + rate + '%）'],
+      ['造成伤害', fmt(win.dealt)],
+      ['承受伤害', fmt(win.taken)],
+      ['命中次数', fmt(win.hits) + ' 次'],
+      ['吸血 / 治疗', heal],
+      ['平均 DPS', fmt(dps)],
+      ['对局时长', clock.toFixed(1) + ' 秒'],
+      ['最终状态', rate >= 50 ? '压倒性' : rate >= 20 ? '险胜' : '残血翻盘']
+    ];
+
+    const card = document.getElementById('mvpCard');
+    card.innerHTML =
+      '<div class="mvp-top"><img class="mvp-ava" src="' + ava + '">'
+      + '<div><div class="mvp-name">' + name + '<span class="mvp-badge">MVP</span></div>'
+      + '<div class="mvp-sub">K.O. 获胜 · ' + clock.toFixed(1) + ' 秒</div></div></div>'
+      + '<div class="mvp-grid">'
+      + rows.map(function (r) {
+          return '<div class="mvp-row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>';
+        }).join('')
+      + '</div>'
+      + '<div class="mvp-actions"><button id="btnAgain">再来一局</button></div>'
+      + '<div class="mvp-hint">点卡片外区域也可以重开</div>';
+
+    document.getElementById('koText').classList.remove('show');
+    card.classList.add('show');
+    sfxWin();
+
+    const again = document.getElementById('btnAgain');
+    if (again) again.addEventListener('click', function (e) { e.stopPropagation(); reset(); });
   }
 
   let drawerOn = false, paramsOn = false;
 
   document.getElementById('btnReset').addEventListener('click', () => { reset(); });
+
+  // 结算画面：点卡片外区域也能重开
+  document.getElementById('overlay').addEventListener('click', (e) => {
+    if (mvpOn && e.target.id === 'overlay') reset();
+  });
 
   document.getElementById('btnDetail').addEventListener('click', function () {
     drawerOn = !drawerOn;
