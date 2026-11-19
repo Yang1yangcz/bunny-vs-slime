@@ -4,244 +4,351 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>兔子 vs 史莱姆 · 实时演算</title>
+<!--
+  ============================================================================
+  兔子 vs 史莱姆 · 实时演算 v2
+  ----------------------------------------------------------------------------
+  · 单文件，双击即可运行；所有图片以 base64 内联
+  · 所有可调数值集中在 <script> 开头的 CFG 对象里，带中文注释
+  · 页面下方「参数」按钮可展开查看当前生效的全部数值
+  · 调试：控制台 __sim.advance(秒) / __sim.state()
+  ============================================================================
+-->
 <style>
   :root{
-    --ink:#08202f;
-    --ink-2:#4a6577;
-    --line:rgba(8,32,47,.14);
-    --bg:#eef4f8;
-    --card:#ffffff;
-    --blue:#0fb6f5;
-    --blue-d:#0a8ec0;
-    --red:#e0552f;
-    --green:#2f9e3f;
+    --ink:#0a2a3f;
+    --ink-soft:#2f5670;
+    --sky:#11b4f3;
+    --page1:#e8f6ff;
+    --page2:#c6e7fa;
+    --blood:#ff2f28;
+    --gold:#ffcf5c;
     --violet:#8a5cf6;
+    --ice:#8fd8ff;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{
-    background:linear-gradient(180deg,#f6fafd 0%, #e7f1f7 100%);
+    background:
+      radial-gradient(1200px 600px at 50% -8%, #ffffff 0%, rgba(255,255,255,0) 60%),
+      linear-gradient(180deg, var(--page1) 0%, var(--page2) 100%);
     color:var(--ink);
     font-family:"PingFang SC","Microsoft YaHei",ui-sans-serif,system-ui,-apple-system,sans-serif;
     -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
   }
-  .app{max-width:1560px;margin:0 auto;padding:16px 20px 20px;min-height:100vh;display:flex;flex-direction:column;}
+  .app{
+    max-width:1480px;margin:0 auto;padding:14px 20px 22px;
+    min-height:100vh;display:flex;flex-direction:column;gap:10px;
+  }
 
-  header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;}
-  h1{margin:0;font-size:26px;letter-spacing:.02em;font-weight:800}
-  h1 em{font-style:normal;color:var(--ink-2);font-weight:600;font-size:18px;margin:0 .45em}
-  .hud-actions{display:flex;gap:10px}
-  button{
-    font:inherit;font-size:14px;font-weight:700;color:var(--ink);
-    background:#fff;border:2px solid var(--ink);border-radius:10px;
-    padding:8px 16px;cursor:pointer;transition:transform .08s ease, background .15s ease;
-    box-shadow:0 3px 0 rgba(8,32,47,.9);
+  .title{
+    margin:0;text-align:center;font-size:clamp(24px,3.2vw,38px);font-weight:900;
+    letter-spacing:.06em;color:var(--ink);
+    text-shadow:0 2px 0 rgba(255,255,255,.75);
+    line-height:1.1;
   }
-  button:hover{background:#f2f8fc}
-  button:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(8,32,47,.9)}
+  .title em{
+    font-style:normal;font-size:.58em;font-weight:800;color:var(--ink-soft);
+    margin:0 .42em;letter-spacing:.02em;
+  }
+
+  .board{
+    display:grid;grid-template-columns:228px minmax(0,1fr) 228px;
+    gap:14px;align-items:center;flex:1;min-height:0;
+  }
+  .stage-wrap{display:flex;justify-content:center;align-items:center;min-width:0}
+  .stage{
+    position:relative;background:var(--sky);border:7px solid var(--ink);
+    box-shadow:0 10px 0 rgba(10,42,63,.16), 0 18px 40px rgba(10,42,63,.20);
+    overflow:hidden;
+  }
+  canvas{display:block;width:100%;height:100%}
+
+  .hud{display:flex;flex-direction:column;gap:10px}
+  .card{
+    background:#eaf6fd;border:3px solid var(--ink);border-radius:12px;
+    box-shadow:0 4px 0 var(--ink);
+    overflow:hidden;
+  }
+  .card-top{display:flex;align-items:center;gap:8px;padding:8px 10px 6px}
+  .avatar{
+    width:38px;height:38px;border:2px solid var(--ink);border-radius:9px;
+    object-fit:cover;background:#cfe9f7;flex:none;
+  }
+  .who{font-size:15px;font-weight:900;line-height:1.1}
+  .who small{display:block;font-size:10.5px;font-weight:600;color:var(--ink-soft);margin-top:3px}
+
+  .bar{height:13px;margin:0 10px;border:2px solid var(--ink);border-radius:7px;background:#fff;overflow:hidden;position:relative}
+  .bar i{display:block;height:100%;width:100%;background:linear-gradient(180deg,#ff6a5a,var(--blood));transition:width .12s linear}
+  .bar b{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:900;color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.55);
+    letter-spacing:.02em;
+  }
+  .stat{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-soft);padding:4px 12px 0;font-variant-numeric:tabular-nums}
+
+  .skills{padding:8px 8px 9px;display:flex;flex-direction:column;gap:7px}
+  .sk{
+    display:grid;grid-template-columns:34px 1fr;gap:8px;align-items:center;
+    border:2px solid rgba(10,42,63,.16);border-radius:9px;padding:6px;background:#f7fcff;
+    transition:border-color .12s ease, background .12s ease;
+  }
+  .sk.ready{border-color:rgba(34,160,74,.5);background:#f3fdf6}
+  .sk.active{border-color:var(--violet);background:#f8f4ff}
+  .sk.lock{border-color:var(--blood);background:#fff4f3}
+  .sk-ico{width:34px;height:34px;display:block}
+  .sk-ico svg{width:100%;height:100%;display:block}
+  .sk-main{min-width:0}
+  .sk-name{font-size:11.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sk-line{display:flex;justify-content:space-between;gap:6px;font-size:10px;font-weight:700;color:var(--ink-soft);margin-top:2px;font-variant-numeric:tabular-nums}
+  .sk.ready .sk-line b{color:#1c8b45}
+  .sk.active .sk-line b{color:var(--violet)}
+  .sk.lock .sk-line b{color:var(--blood)}
+  .sk-bar{height:5px;border-radius:3px;background:#dce9f1;margin-top:4px;overflow:hidden}
+  .sk-bar i{display:block;height:100%;width:100%;background:var(--sky);transition:width .1s linear}
+  .sk.ready .sk-bar i{background:#35b45f}
+  .sk.active .sk-bar i{background:var(--violet)}
+  .sk.lock .sk-bar i{background:var(--blood)}
+
+  .toolbar{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+  button{
+    font:inherit;font-size:13px;font-weight:900;color:var(--ink);
+    background:#fff;border:3px solid var(--ink);border-radius:11px;
+    padding:7px 16px;cursor:pointer;box-shadow:0 4px 0 var(--ink);
+    transition:transform .07s ease, background .15s ease;
+  }
+  button:hover{background:#f0f9ff}
+  button:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
   button.on{background:var(--ink);color:#fff}
 
-  main{
-    display:grid;
-    grid-template-columns:250px minmax(0,1fr) 250px;
-    gap:16px;align-items:center;flex:1;min-height:0;
+  .drawer{
+    display:none;position:fixed;left:0;right:0;bottom:0;z-index:60;
+    max-width:1480px;margin:0 auto;max-height:46vh;overflow:auto;
+    background:#eaf6fd;border:3px solid var(--ink);border-bottom:0;
+    border-radius:14px 14px 0 0;box-shadow:0 -10px 30px rgba(10,42,63,.25);
   }
+  .drawer.show{display:block}
+  body.drawer-open .board{align-items:flex-start}
+  .drawer h2{
+    margin:0;padding:9px 14px;font-size:12.5px;letter-spacing:.08em;
+    background:var(--ink);color:#fff;position:sticky;top:0;z-index:2;
+  }
+  .cols{display:grid;grid-template-columns:1fr 1fr}
+  .col{padding:10px 14px 14px}
+  .col+.col{border-left:2px dashed rgba(10,42,63,.18)}
+  .col h3{margin:0 0 8px;font-size:12px;color:var(--ink)}
+  .row{display:grid;grid-template-columns:92px 1fr auto;gap:8px;align-items:center;font-size:11.5px;padding:3px 0}
+  .row .k{color:var(--ink-soft);font-weight:700}
+  .row .bar2{height:9px;border:2px solid var(--ink);border-radius:5px;background:#fff;overflow:hidden;min-width:70px}
+  .row .bar2 i{display:block;height:100%;background:linear-gradient(180deg,#ff6a5a,var(--blood));transition:width .12s linear}
+  .row .v{font-variant-numeric:tabular-nums;font-weight:800;white-space:nowrap}
+  .tag{display:inline-block;padding:1px 7px;border-radius:6px;font-size:10.5px;font-weight:900;border:2px solid currentColor}
+  .t-ok{color:#1c8b45} .t-cd{color:var(--ink-soft)} .t-on{color:var(--violet)} .t-lock{color:var(--blood)}
 
-  /* ---------- 舞台 ---------- */
-  .stage-wrap{display:flex;justify-content:center;align-items:flex-start;min-width:0}
-  .stage{position:relative;background:var(--blue);border:3px solid var(--ink);border-radius:6px;overflow:hidden;width:100%}
-  canvas{display:block;width:100%;height:100%}
+  .params{display:none;position:fixed;left:0;right:0;bottom:0;z-index:61;max-width:1480px;margin:0 auto;
+    max-height:58vh;overflow:auto;background:#0a2a3f;color:#d7ecf7;border-radius:14px 14px 0 0;
+    box-shadow:0 -10px 30px rgba(10,42,63,.35);font-size:11.5px}
+  .params.show{display:block}
+  .params h2{margin:0;padding:9px 14px;font-size:12.5px;letter-spacing:.08em;background:#08202f;color:#9ad7f5;
+    position:sticky;top:0}
+  .params pre{margin:0;padding:12px 16px 20px;line-height:1.7;font-family:ui-monospace,Consolas,monospace;white-space:pre-wrap}
+  .params .c{color:#6f9ab0}
+  .params .n{color:#ffd166}
+
+  .sound-hint{
+    position:absolute;left:50%;bottom:12px;transform:translateX(-50%);
+    background:rgba(10,42,63,.8);color:#fff;font-size:11.5px;font-weight:700;
+    padding:6px 14px;border-radius:20px;pointer-events:none;transition:opacity .4s ease;
+  }
+  .sound-hint.hide{opacity:0}
+
+  .banner{
+    position:absolute;left:0;right:0;top:13%;text-align:center;pointer-events:none;
+    font-size:clamp(20px,3vw,34px);font-weight:900;color:#fff;letter-spacing:.08em;
+    text-shadow:0 3px 0 rgba(10,42,63,.6), 0 0 24px rgba(143,216,255,.9);
+    opacity:0;transition:opacity .18s ease;
+  }
+  .banner.show{opacity:1}
   .verdict{
-    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
-    flex-direction:column;gap:10px;background:rgba(6,30,46,.55);
-    font-size:52px;font-weight:900;color:#fff;letter-spacing:.06em;
-    text-shadow:0 4px 0 rgba(0,0,0,.25);
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;
+    background:rgba(6,30,46,.5);font-size:clamp(28px,4vw,52px);font-weight:900;color:#fff;letter-spacing:.08em;
+    text-shadow:0 4px 0 rgba(0,0,0,.3);z-index:5;
   }
   .verdict.show{display:flex}
-  .verdict small{font-size:16px;font-weight:600;letter-spacing:.02em;opacity:.9}
+  .verdict small{font-size:14px;font-weight:700;letter-spacing:.02em;opacity:.92}
 
-  /* ---------- 侧栏 ---------- */
-  .side{display:flex;flex-direction:column;gap:12px}
-  .fighter{
-    background:var(--card);border:2px solid var(--ink);border-radius:12px;padding:12px;
-    box-shadow:0 4px 0 rgba(8,32,47,.9);
-  }
-  .fighter .top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-  .fighter .avatar{width:44px;height:44px;border:2px solid var(--ink);border-radius:10px;object-fit:cover;background:#eaf3f8}
-  .fighter .fname{font-weight:800;font-size:16px;line-height:1.1}
-  .fighter .fsub{font-size:11px;color:var(--ink-2);margin-top:3px}
-  .hpbar{height:14px;border:2px solid var(--ink);border-radius:8px;background:#dfe9f0;overflow:hidden;position:relative}
-  .hpbar i{display:block;height:100%;width:100%;background:linear-gradient(180deg,#5ee07a,#2f9e3f);transition:width .12s linear}
-  .hpbar.low i{background:linear-gradient(180deg,#ff8a5c,#e0552f)}
-  .hptxt{font-size:12px;color:var(--ink-2);margin-top:5px;display:flex;justify-content:space-between;font-variant-numeric:tabular-nums}
-
-  .skills{margin-top:10px;display:flex;flex-direction:column;gap:8px}
-  .sk{border:2px solid var(--line);border-radius:10px;padding:8px 9px;background:#fbfdff}
-  .sk.ready{border-color:rgba(47,158,63,.45);background:#f3fcf5}
-  .sk.active{border-color:var(--violet);background:#f7f4ff}
-  .sk-head{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
-  .sk-name{font-size:12.5px;font-weight:800}
-  .sk-cd{font-size:11px;font-weight:700;color:var(--ink-2);font-variant-numeric:tabular-nums}
-  .sk.ready .sk-cd{color:var(--green)}
-  .sk.active .sk-cd{color:var(--violet)}
-  .sk-bar{height:6px;border-radius:4px;background:#e3ecf2;margin-top:6px;overflow:hidden}
-  .sk-bar i{display:block;height:100%;width:100%;background:var(--blue);transition:width .1s linear}
-  .sk.ready .sk-bar i{background:var(--green)}
-  .sk.active .sk-bar i{background:var(--violet)}
-  .sk-note{font-size:10.5px;color:var(--ink-2);margin-top:5px;line-height:1.35}
-
-  /* ---------- 详细模式（底部抽屉，不挤压画布） ---------- */
-  .detail{
-    display:none;position:fixed;left:0;right:0;bottom:0;z-index:60;
-    max-width:1560px;margin:0 auto;max-height:44vh;overflow:auto;
-    background:var(--card);border:2px solid var(--ink);border-bottom:0;
-    border-radius:14px 14px 0 0;box-shadow:0 -8px 28px rgba(8,32,47,.22);
-  }
-  .detail.show{display:block}
-  /* 抽屉打开时，画布和面板改为顶部对齐，避免被抽屉压住 */
-  body.detail-open main{align-items:flex-start}
-  .detail h2{margin:0;padding:12px 16px;font-size:14px;background:#f2f8fc;border-bottom:2px solid var(--line);letter-spacing:.04em}
-  .cols{display:grid;grid-template-columns:1fr 1fr;gap:0}
-  .col{padding:12px 16px}
-  .col+.col{border-left:2px solid var(--line)}
-  .col h3{margin:0 0 8px;font-size:13px;color:var(--blue-d);letter-spacing:.03em}
-  table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
-  td{padding:4px 0;border-bottom:1px dashed rgba(8,32,47,.10)}
-  td.k{color:var(--ink-2);width:46%}
-  td.v{text-align:right;font-weight:700}
-  .tag{display:inline-block;padding:1px 7px;border-radius:6px;font-size:11px;font-weight:800;border:1.5px solid currentColor}
-  .t-ok{color:var(--green)} .t-cd{color:var(--ink-2)} .t-on{color:var(--violet)} .t-lock{color:var(--red)}
-
-  @media (max-width:1180px){
-    main{grid-template-columns:1fr;}
-    .side{flex-direction:row;flex-wrap:wrap}
-    .fighter{flex:1 1 320px}
+  @media (max-width:1120px){
+    .board{grid-template-columns:1fr}
+    .hud{flex-direction:row;flex-wrap:wrap}
+    .card{flex:1 1 300px}
     .cols{grid-template-columns:1fr}
-    .col+.col{border-left:0;border-top:2px solid var(--line)}
+    .col+.col{border-left:0;border-top:2px dashed rgba(10,42,63,.18)}
   }
 </style>
 </head>
 <body>
 <div class="app">
-  <header>
-    <h1>兔子 <em>vs</em> 史莱姆<span style="font-size:13px;color:#4a6577;font-weight:600;margin-left:12px">实时演算</span></h1>
-    <div class="hud-actions">
-      <button id="btnDetail">详细模式</button>
-      <button id="btnReset">重新开局</button>
-    </div>
-  </header>
+  <h1 class="title">兔子 <em>vs</em> 史莱姆</h1>
 
-  <main>
-    <aside class="side" id="sideA"></aside>
+  <div class="board">
+    <aside class="hud" id="hudA"></aside>
 
     <div class="stage-wrap" id="wrap">
       <div class="stage" id="stage">
         <canvas id="cv"></canvas>
+        <div class="banner" id="banner"></div>
         <div class="verdict" id="verdict"></div>
+        <div class="sound-hint" id="soundHint">点击画面开启音效</div>
       </div>
     </div>
 
-    <aside class="side" id="sideB"></aside>
-  </main>
+    <aside class="hud" id="hudB"></aside>
+  </div>
 
-  <section class="detail" id="detail">
-    <h2>详细数值</h2>
-    <div class="cols">
-      <div class="col" id="detailA"></div>
-      <div class="col" id="detailB"></div>
-    </div>
-  </section>
+  <div class="toolbar">
+    <button id="btnDetail">详细数值</button>
+    <button id="btnParams">参数</button>
+    <button id="btnReset">重新开局</button>
+  </div>
 </div>
+
+<section class="drawer" id="drawer">
+  <h2>详细数值</h2>
+  <div class="cols">
+    <div class="col" id="detailA"></div>
+    <div class="col" id="detailB"></div>
+  </div>
+</section>
+
+<section class="params" id="params"><h2>当前生效参数（改源码顶部 CFG 即可）</h2><pre id="paramsBody"></pre></section>
 
 <script>
 (function () {
   'use strict';
 
-  // ============================================================
-  // 配置：所有数值集中在这里，改这一块就能调平衡
-  // ============================================================
+  // ==========================================================================
+  //  ①  参 数 区 —— 想微调只改这里
+  // ==========================================================================
   const CFG = {
-    arena: { w: 960, h: 720, border: 3 },
 
+    // ---- 场地 ----
+    arena: {
+      w: 960, h: 720,        // 逻辑画布尺寸（4:3）
+      border: 6              // 角色离边框的最小距离
+    },
+
+    // ---- 兔子 ----
     rabbit: {
-      name: '兔子',
-      maxHp: 10000,
-      atk: 3000,
-      speed: [180, 320],          // 开局随机速度区间（"随机的一个力"）
+      maxHp: 10000,          // 基础生命
+      atk: 3000,             // 基础攻击
+      speed: [180, 320],     // 开局随机初速区间（"随机的一个力"）
+
       hammer: {
-        period: 3.4,              // 每几秒抡一次
-        dur: 1.7,                 // 抡的持续时间
-        spin: 820,                // 度/秒
-        orbitR: 128,              // 锤心绕身半径
-        len: 178,                 // 锤子显示长度
-        hitR: 62                  // 锤头判定半径
+        period: 3.4,         // 每 3.4s 抡一次
+        dur: 1.7,            // 一次挥击持续 1.7s
+        spin: 820,           // 旋转角速度（度/秒）
+        orbitR: 128,         // 锤心绕身半径
+        len: 178,            // 锤子显示长度
+        hitR: 62,            // 锤头判定半径
+        dashGap: 250         // 距离超过这个值就先冲刺贴身
       },
-      // 锤子伤害 = 70% 基础攻击 + 1% 当前生命
+
+      // 锤击伤害 = 70% × 攻击力 + 1% × 兔子当前生命
+      // 满血约 2100 + 100 = 2200 ≈ 对方 22% 生命
       dmgAtkRatio: 0.70,
       dmgHpRatio: 0.01,
-      // 破釜沉舟：生命低于 20% → 锁血 + 冰岛冲击（每局一次）
+
+      // ---- 破釜沉舟：生命 < 20% 触发 ----
       ult: {
-        hpThreshold: 0.20,
-        lockDur: 3.0,             // 锁血持续
-        dmg: 2900,                // 冰岛冲击伤害（占位，等你给具体设定）
-        stun: 1.5,
-        airType: true             // 属于空中/全屏伤害，浮空也躲不掉
+        hpThreshold: 0.20,   // 触发线
+        lockDur: 2.0,        // 锁血 2 秒（期间不掉血）
+        freeze: 3.0,         // 冰冻 3 秒（双方面对面对峙，停止运动）
+        iceDur: 3.4,         // 冰岛背景持续时间，结束后关闭
+        dmgRatio: 0.30,      // 冰岛冲击伤害 = 30% × 对方最大生命
+        stun: 1.2
       }
     },
 
+    // ---- 史莱姆 ----
     slime: {
-      name: '史莱姆',
-      maxHp: 10000,               // 你没给数值，先和兔子对称
+      maxHp: 10000,
       atk: 3000,
       speed: [180, 320],
+
       spit: {
-        period: 5.3,
-        dmgRatio: 0.60,           // 每颗球伤害 = 60% 攻击力
+        period: 5.0,         // 每 5s 喷一组
+        chain: 0.34,         // 两连喷的间隔
+        dmgRatio: 0.18,      // 单球伤害 = 18% × 对方最大生命 = 1800
         speed: 380,
         r: 33, miniR: 23,
         life: 14,
-        split: 2,
+        split: 2,            // 第二颗撞上第一颗 → 分裂成 2 个
         maxBlobs: 8
       },
-      lifesteal: 0.03,            // 命中回复自身最大生命 3%
-      // 技能一：站在道德制高点
+
+      lifesteal: 0.03,       // 命中回自身最大生命 3%
+
+      // ---- 技能一：站在道德制高点 ----
       moral: {
-        cd: 18, air: 5
+        cd: 22,              // 冷却 22s
+        air: 5,              // 浮空 5s，期间免疫全部伤害
+        counterChance: 0.45, // 对轴概率：兔子放大招时，有多少概率刚好同时起飞挡掉
+        startCd: 7           // 开局初始冷却
       },
-      // 技能二：历史的回眸
+
+      // ---- 技能二：历史的回眸 ----
       history: {
         cd: 26,
-        mute: 10,                 // 施放后停手时间
-        lookBack: 10,             // "10 秒前" 的前一个窗口
-        healRatio: 0.30,          // 回复前窗口承伤的 30%
-        reflectRatio: 0.20,       // 把本窗口承伤的 20% 打回给对方
-        minDamageToCast: 0.05     // 最近 10s 承伤超过 5% 血才值得放
+        lookBack: 10,        // 回看窗口（秒）
+        healRatio: 0.30,     // 回「上一个 10s 窗口承伤」的 30%
+        reflectRatio: 0.20,  // 把「本 10s 窗口承伤」的 20% 打回去
+        mute: 10,            // 施放后停手 10s
+        needRatio: 0.05,     // 最近 10s 承伤超过 5% 血才值得放
+        startCd: 10
       }
+    },
+
+    // ---- 表现 ----
+    feel: {
+      shake: 1.0,            // 全局震屏强度
+      snow: 90,              // 冰岛背景下的雪粒数量
+      numLife: 1.0           // 飘字存活时间
     }
   };
 
+  // ==========================================================================
+  //  ②  基础工具
+  // ==========================================================================
   const W = CFG.arena.w, H = CFG.arena.h, BORDER = CFG.arena.border;
   const DEG = Math.PI / 180;
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const rand = (a, b) => a + Math.random() * (b - a);
 
-  // ============================================================
-  // 资源
-  // ============================================================
-  const IMG = { a: '__IMG_A__', b: '__IMG_B__', hammer: '__IMG_HAMMER__' };
+  const IMG_SRC = {
+    a: '__IMG_A__',
+    b: '__IMG_B__',
+    hammer: '__IMG_HAMMER__',
+    ice: '__IMG_ICE__'
+  };
 
   const cv = document.getElementById('cv');
   const ctx = cv.getContext('2d');
   const stage = document.getElementById('stage');
+  const wrap = document.getElementById('wrap');
   let scale = 1;
 
+  const img = {};
+  for (const k in IMG_SRC) {
+    img[k] = new Image();
+    img[k].src = IMG_SRC[k];
+  }
+
   function resize() {
-    // 先按可用宽高把舞台定成画布比例，避免拉伸
-    const wrap = document.getElementById('wrap');
     const availW = wrap.clientWidth || 640;
-    // 详细模式抽屉打开时，给底部留出抽屉高度，画布相应缩小
-    const reserve = detailOn ? Math.min(window.innerHeight * 0.44, 430) : 0;
-    const availH = Math.max(240, window.innerHeight - 120 - reserve);
+    const reserve = drawerOn ? Math.min(window.innerHeight * 0.46, 430)
+                  : paramsOn ? Math.min(window.innerHeight * 0.58, 470) : 0;
+    const availH = Math.max(240, window.innerHeight - 150 - reserve);
     const w = Math.min(availW, availH * (W / H));
     stage.style.width = Math.floor(w) + 'px';
     stage.style.height = Math.floor(w * H / W) + 'px';
@@ -252,123 +359,235 @@
     cv.height = Math.max(2, Math.round(r.height * dpr));
     scale = cv.width / W;
   }
-  window.addEventListener('resize', resize);
 
-  // ============================================================
-  // 实体
-  // ============================================================
-  function makeFighter(cfg, side, imgSrc) {
+  // ==========================================================================
+  //  ③  音效（WebAudio 现场合成，无外部文件）
+  // ==========================================================================
+  const SFX = { ctx: null, out: null };
+
+  function audioInit() {
+    if (SFX.ctx) { if (SFX.ctx.state === 'suspended') SFX.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    SFX.ctx = new AC();
+    SFX.out = SFX.ctx.createGain();
+    SFX.out.gain.value = 0.55;
+    const comp = SFX.ctx.createDynamicsCompressor();
+    SFX.out.connect(comp).connect(SFX.ctx.destination);
+  }
+
+  function noise(dur) {
+    const sr = SFX.ctx.sampleRate, len = Math.ceil(sr * dur);
+    const b = SFX.ctx.createBuffer(1, len, sr);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return b;
+  }
+
+  function tone(type, f0, f1, t0, dur, vol) {
+    const c = SFX.ctx;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t0);
+    if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + Math.min(0.02, dur * 0.2));
+    g.gain.exponentialRampToValueAtTime(0.0004, t0 + dur);
+    o.connect(g).connect(SFX.out);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+
+  function burst(t0, dur, type, f0, f1, q, vol) {
+    const c = SFX.ctx;
+    const s = c.createBufferSource(); s.buffer = noise(dur);
+    const bp = c.createBiquadFilter(); bp.type = type; bp.Q.value = q || 1;
+    bp.frequency.setValueAtTime(f0, t0);
+    if (f1) bp.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0005, t0 + dur);
+    s.connect(bp).connect(g).connect(SFX.out);
+    s.start(t0); s.stop(t0 + dur + 0.02);
+  }
+
+  function sfxHit(big) {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    tone('sine', big ? 150 : 190, 55, t, big ? 0.3 : 0.2, big ? 0.7 : 0.45);
+    burst(t, 0.16, 'bandpass', 1500, 700, 0.8, big ? 0.5 : 0.32);
+    tone('triangle', 2200, 900, t, 0.06, 0.1);
+  }
+
+  function sfxSpit() {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    tone('sine', 760, 190, t, 0.16, 0.26);
+    burst(t, 0.1, 'bandpass', 900, 400, 3, 0.09);
+  }
+
+  function sfxOrbit() {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    burst(t, 0.55, 'bandpass', 260, 1900, 2.2, 0.18);
+    tone('sawtooth', 72, 128, t, 0.5, 0.1);
+  }
+
+  function sfxIce() {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    tone('sine', 90, 32, t, 0.9, 0.85);
+    burst(t, 0.7, 'lowpass', 4200, 380, 0.7, 0.5);
+    for (let i = 0; i < 7; i++) tone('triangle', 2400 + Math.random() * 2200, 1400, t + 0.03 * i, 0.12, 0.06);
+  }
+
+  function sfxMoral() {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    [392, 523.25, 659.25, 784].forEach((f, i) => {
+      tone('sine', f, f, t + i * 0.04, 1.3, 0.11);
+      tone('triangle', f * 2, f * 2, t + i * 0.04, 0.9, 0.035);
+    });
+    burst(t, 1.0, 'highpass', 3000, 6000, 0.6, 0.1);
+  }
+
+  function sfxHistory() {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    burst(t, 0.7, 'bandpass', 3200, 260, 1.6, 0.24);
+    tone('sawtooth', 380, 90, t, 0.6, 0.14);
+    tone('sine', 1046, 1046, t + 0.35, 0.9, 0.1);
+    tone('sine', 1568, 1568, t + 0.42, 0.7, 0.05);
+  }
+
+  function sfxFreeze() {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    burst(t, 1.2, 'highpass', 1800, 5200, 0.8, 0.26);
+    tone('sine', 1400, 2400, t, 0.8, 0.09);
+    tone('sine', 2100, 3200, t + 0.1, 0.7, 0.05);
+  }
+
+  function sfxKO() {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    tone('sine', 120, 32, t, 0.8, 0.8);
+    burst(t, 0.6, 'lowpass', 3600, 420, 0.7, 0.5);
+    tone('triangle', 1560, 520, t, 0.35, 0.12);
+  }
+
+  // ==========================================================================
+  //  ④  实体
+  // ==========================================================================
+  function makeFighter(cfg, side, key) {
     const f = {
-      cfg, side,
-      img: new Image(),
+      cfg, side, key,
+      maxHp: cfg.maxHp, hp: cfg.maxHp, atk: cfg.atk,
       dw: 1, dh: 1, hw: 1, hh: 1, rc: 1,
-      maxHp: cfg.maxHp, hp: cfg.maxHp,
-      atk: cfg.atk,
-      x: 0, y: 0, vx: 0, vy: 0, sp: 0,
-      face: side === 'left' ? 1 : -1,
-      stun: 0, flash: 0, shake: 0, squash: 0,
+      x: 0, y: 0, vx: 0, vy: 0, sp: 0, face: side === 'left' ? 1 : -1,
+      stun: 0, flash: 0, shake: 0, squash: 0, frozen: 0,
       dealt: 0, taken: 0, healed: 0, hits: 0,
-      dmgLog: [],                 // {t, amount}
-      sky: 0,                     // 浮空剩余时间
-      mute: 0,                    // 停手剩余时间
-      invuln: 0,                  // 锁血剩余时间
-      ready: false
+      dmgLog: [], sky: 0, invuln: 0
     };
-    f.img.onload = () => {
-      const iw = f.img.naturalWidth, ih = f.img.naturalHeight;
-      const maxSide = (side === 'left' ? 165 : 178) * 1.12;
+    const im = img[key];
+    const fit = () => {
+      const iw = im.naturalWidth, ih = im.naturalHeight;
+      if (!iw) return;
+      const maxSide = (side === 'left' ? 182 : 196) * 1.10;
       const s = maxSide / Math.max(iw, ih);
       f.dw = iw * s; f.dh = ih * s;
       f.hw = f.dw / 2; f.hh = f.dh / 2;
       f.rc = (f.hw + f.hh) / 2;
-      f.ready = true;
     };
-    f.img.src = imgSrc;
+    if (im.complete && im.naturalWidth) fit(); else im.addEventListener('load', fit);
     return f;
   }
 
-  const rabbit = makeFighter(CFG.rabbit, 'left', IMG.a);
-  const slime = makeFighter(CFG.slime, 'right', IMG.b);
+  const rabbit = makeFighter(CFG.rabbit, 'left', 'a');
+  const slime = makeFighter(CFG.slime, 'right', 'b');
   const fighters = [rabbit, slime];
 
-  // 锤子贴图（锤头朝右）
-  const hammer = { img: new Image(), dw: 1, dh: 1, ready: false };
-  hammer.img.onload = () => {
-    const s = CFG.rabbit.hammer.len / hammer.img.naturalWidth;
-    hammer.dw = CFG.rabbit.hammer.len;
-    hammer.dh = hammer.img.naturalHeight * s;
-    hammer.ready = true;
-  };
-  hammer.img.src = IMG.hammer;
+  let clock = 0, over = null, blobs = [], pending = [], gen = 0;
+  const fx = { nums: [], rings: [], sparks: [], snow: [], shards: [] };
 
-  // ============================================================
-  // 状态
-  // ============================================================
-  let clock = 0;
-  let over = null;                // null | 'rabbit' | 'slime'
-  let blobs = [];
-  let pending = [];               // 按模拟时间触发的延迟事件
-  let gen = 0;                    // 局数代号，重开后丢弃上一局的延迟事件
-  const fx = { nums: [], shock: [], sparks: [], ring: [] };
-
-  const rState = {
-    on: false, t: 0, idle: 0, ang: -Math.PI / 2, hitDone: false,
-    ultUsed: false, lockT: 0, castT: 0
+  const R = {
+    on: false, t: 0, idle: 1.0, ang: -Math.PI / 2, hitDone: false, tail: 0,
+    ultUsed: false, lockT: 0, iceT: 0, freezeT: 0
   };
-  const sState = {
+  const S = {
     idle: 2.0, chain: 0, chainT: 0,
-    moral: { cd: 0, air: 0 },
-    history: { cd: 0, mute: 0 },
-    lastReflect: 0, lastHeal: 0
+    moral: { cd: CFG.slime.moral.startCd, air: 0 },
+    history: { cd: CFG.slime.history.startCd, mute: 0 },
+    lastHeal: 0, lastReflect: 0
   };
 
-  // ============================================================
-  // 开局：随机位置 + 随机力
-  // ============================================================
-  function spawn(f) {
-    const leftHalf = f.side === 'left';
-    const xMin = leftHalf ? BORDER + f.hw + 20 : W / 2 + f.hw + 20;
-    const xMax = leftHalf ? W / 2 - f.hw - 20 : W - BORDER - f.hw - 20;
-    f.x = rand(xMin, Math.max(xMin + 1, xMax));
-    f.y = rand(BORDER + f.hh + 30, H - BORDER - f.hh - 30);
+  // ---- 技能图标（内联 SVG，和画面同一套描边风格）----
+  const ICON = {
+    hammer: '<svg viewBox="0 0 40 40"><g fill="none" stroke="#0a2a3f" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"><path d="M9 33 L23 19" stroke="#b9793f" stroke-width="6"/><path d="M9 33 L23 19" stroke="#0a2a3f" stroke-width="2.2"/><rect x="17" y="5" width="17" height="11" rx="3" fill="#cfd8df"/></g></svg>',
+    ice: '<svg viewBox="0 0 40 40"><g fill="none" stroke="#0a2a3f" stroke-width="2.4" stroke-linejoin="round"><path d="M5 31 h30 l-7 -10 h-16 z" fill="#9fe3ff"/><path d="M20 7 l7 11 h-14 z" fill="#e6faff"/><path d="M12 12 l4 8" stroke="#7fd0f5"/><path d="M29 13 l-3 7" stroke="#7fd0f5"/></g></svg>',
+    moral: '<svg viewBox="0 0 40 40"><g fill="none" stroke="#0a2a3f" stroke-width="2.4" stroke-linejoin="round"><ellipse cx="20" cy="13" rx="12" ry="5" fill="#f5f1ff"/><path d="M8 13 a12 12 0 0 0 24 0" fill="#ffffff"/><path d="M15 25 h10 M17 29 h6" stroke="#8a5cf6"/><circle cx="20" cy="20" r="3.4" fill="#ffe6a6"/></g></svg>',
+    history: '<svg viewBox="0 0 40 40"><g fill="none" stroke="#0a2a3f" stroke-width="2.4" stroke-linejoin="round"><circle cx="20" cy="22" r="12" fill="#ffffff"/><path d="M20 15 v7 l5 3"/><path d="M10 9 a14 14 0 0 1 9 -3" stroke="#8a5cf6" stroke-width="3"/><path d="M8 6 l2 5 5 -2" fill="#8a5cf6" stroke="#8a5cf6" stroke-width="2"/></g></svg>'
+  };
 
-    const [lo, hi] = f.cfg.speed;
-    const sp = rand(lo, hi);
-    // 朝斜向内部飞，避免一开局就贴墙
-    const ang = leftHalf ? rand(-55, 55) * DEG : rand(125, 235) * DEG;
+  // ==========================================================================
+  //  ⑤  开局
+  // ==========================================================================
+  function spawn(f) {
+    const left = f.side === 'left';
+    const xMin = left ? BORDER + f.hw + 16 : W / 2 + f.hw + 16;
+    const xMax = left ? W / 2 - f.hw - 16 : W - BORDER - f.hw - 16;
+    f.x = rand(xMin, Math.max(xMin + 1, xMax));
+    f.y = rand(BORDER + f.hh + 40, H - BORDER - f.hh - 40);
+    const sp = rand(f.cfg.speed[0], f.cfg.speed[1]);
+    const ang = left ? rand(-55, 55) * DEG : rand(125, 235) * DEG;
     f.vx = Math.cos(ang) * sp;
     f.vy = Math.sin(ang) * sp;
     f.sp = sp;
   }
 
-  function reset() {
-    clock = 0; over = null; blobs = [];
-    gen += 1; pending = [];
-    fx.nums.length = 0; fx.shock.length = 0; fx.sparks.length = 0; fx.ring.length = 0;
-
-    for (const f of fighters) {
-      f.hp = f.maxHp;
-      f.stun = 0; f.flash = 0; f.shake = 0; f.squash = 0;
-      f.dealt = 0; f.taken = 0; f.healed = 0; f.hits = 0;
-      f.dmgLog = []; f.sky = 0; f.mute = 0; f.invuln = 0;
-      spawn(f);
+  function seedSnow() {
+    fx.snow.length = 0;
+    for (let i = 0; i < CFG.feel.snow; i++) {
+      fx.snow.push({
+        x: Math.random() * W, y: Math.random() * H,
+        r: rand(1, 3.2), sp: rand(24, 80), drift: rand(-16, 16), a: rand(0.25, 0.85)
+      });
     }
-
-    rState.on = false; rState.t = 0; rState.idle = 1.2;
-    rState.ang = -Math.PI / 2; rState.hitDone = false;
-    rState.ultUsed = false; rState.lockT = 0; rState.castT = 0;
-
-    sState.idle = 2.0; sState.chain = 0; sState.chainT = 0;
-    sState.moral.cd = 6; sState.moral.air = 0;
-    sState.history.cd = 10; sState.history.mute = 0;
-    sState.lastReflect = 0; sState.lastHeal = 0;
-
-    document.getElementById('verdict').classList.remove('show');
   }
 
-  // ============================================================
-  // 伤害系统
-  // ============================================================
+  function reset() {
+    gen += 1;
+    clock = 0; over = null; blobs = []; pending = [];
+    fx.nums.length = 0; fx.rings.length = 0; fx.sparks.length = 0; fx.shards.length = 0;
+
+    for (const f of fighters) {
+      f.hp = f.maxHp; f.stun = 0; f.flash = 0; f.shake = 0; f.squash = 0; f.frozen = 0;
+      f.dealt = 0; f.taken = 0; f.healed = 0; f.hits = 0; f.dmgLog = [];
+      f.sky = 0; f.invuln = 0;
+      spawn(f);
+    }
+    R.on = false; R.t = 0; R.idle = 1.0; R.ang = -Math.PI / 2; R.hitDone = false; R.tail = 0;
+    R.ultUsed = false; R.lockT = 0; R.iceT = 0; R.freezeT = 0;
+
+    S.idle = 2.0; S.chain = 0; S.chainT = 0;
+    S.moral.cd = CFG.slime.moral.startCd; S.moral.air = 0;
+    S.history.cd = CFG.slime.history.startCd; S.history.mute = 0;
+    S.lastHeal = 0; S.lastReflect = 0;
+
+    document.getElementById('verdict').classList.remove('show');
+    showBanner('');
+  }
+
+  // ==========================================================================
+  //  ⑥  伤害 / 治疗
+  // ==========================================================================
+  function addNum(x, y, text, color, size) {
+    fx.nums.push({
+      x: clamp(x, 60, W - 60), y: clamp(y, 34, H - 30),
+      t: 0, dur: CFG.feel.numLife, text, color, size: size || 20
+    });
+  }
+
   function heal(target, amount, color) {
     if (amount <= 0 || target.hp <= 0) return 0;
     const before = target.hp;
@@ -376,199 +595,191 @@
     const real = target.hp - before;
     target.healed += real;
     if (real >= 1) {
-      addNum(target.x, target.y - target.hh - 18, '+' + Math.round(real), color || '#7bd88f', 20);
-      fx.ring.push({ x: target.x, y: target.y, t: 0, dur: 0.5, r0: 5, r1: 58, color: '#7bd88f' });
+      addNum(target.x, target.y - target.hh - 30, '+' + Math.round(real), color || '#7bd88f', 20);
+      fx.rings.push({ x: target.x, y: target.y, t: 0, dur: 0.5, r0: 6, r1: 62, color: '#7bd88f', w: 3 });
     }
     return real;
   }
 
-  /**
-   * kind: 'ground' | 'air'
-   * 浮空（站在道德制高点）只免疫 ground
-   */
   function damage(target, amount, opt) {
     opt = opt || {};
     if (over || target.hp <= 0) return 0;
-    amount = Math.max(0, amount);
+    amount = Math.max(0, Math.round(amount));
 
-    let note = null;
-    if (target.invuln > 0) {
-      note = '锁血';
-    } else if (target.sky > 0 && opt.kind !== 'air') {
-      note = '免疫';
-    }
-
-    if (note) {
-      addNum(target.x, target.y - target.hh - 30, note, '#8fd8ff', 17);
-      fx.ring.push({ x: target.x, y: target.y, t: 0, dur: 0.42, r0: 4, r1: 46, color: '#8fd8ff' });
+    if (target.invuln > 0 || target.sky > 0) {
+      const locked = target.invuln > 0;
+      addNum(target.x, target.y - target.hh - 34, locked ? '锁血' : '免疫',
+        locked ? '#ff9a8a' : '#b98bff', 17);
+      fx.rings.push({
+        x: target.x, y: target.y, t: 0, dur: 0.42, r0: 4, r1: 52,
+        color: locked ? '#ff9a8a' : '#b98bff', w: 3
+      });
       return 0;
     }
 
-    const before = target.hp;
-
-    // 兔子破釜沉舟：任何一下都不能把它从阈值上方直接打死，最多打到 20% 线
-    if (target === rabbit && !rState.ultUsed) {
+    // 兔子大招：任何一下都只能打到 20% 线
+    if (target === rabbit && !R.ultUsed) {
       const floor = target.maxHp * CFG.rabbit.ult.hpThreshold;
-      if (target.hp > floor && target.hp - amount < floor) {
-        amount = target.hp - floor;
-      }
+      if (target.hp > floor && target.hp - amount < floor) amount = target.hp - floor;
     }
 
+    const before = target.hp;
     target.hp = Math.max(0, target.hp - amount);
     const real = before - target.hp;
     target.taken += real;
     target.dmgLog.push({ t: clock, amount: real });
     if (opt.source) opt.source.dealt += real;
 
-    addNum(target.x, target.y - target.hh - 26, '-' + Math.round(real),
-           opt.color || (amount >= target.maxHp * 0.15 ? '#ff4d2d' : '#ff9d6b'),
-           amount >= target.maxHp * 0.15 ? 28 : 21);
+    const big = real >= target.maxHp * 0.15;
+    addNum(target.x, target.y - target.hh - 30, '-' + Math.round(real),
+      opt.color || (big ? '#ff3b12' : '#ff9d6b'), big ? 28 : 21);
     fx.sparks.push({ x: target.x, y: target.y, t: 0, dur: 0.3, color: opt.color || '#ffb27a' });
-    fx.ring.push({ x: target.x, y: target.y, t: 0, dur: 0.34, r0: 3, r1: 44, color: '#ffffff' });
+    fx.rings.push({ x: target.x, y: target.y, t: 0, dur: 0.32, r0: 4, r1: 48, color: '#ffffff', w: 2.4 });
 
-    target.flash = 0.2;
-    target.shake = 0.3;
-    target.squash = 0.24;
+    target.flash = 0.2; target.shake = 0.3; target.squash = 0.24;
+    sfxHit(big);
 
     if (target.hp <= 0) {
       over = target === rabbit ? 'slime' : 'rabbit';
+      sfxKO();
       showVerdict(over);
     }
     return real;
   }
 
-  function addNum(x, y, text, color, size) {
-    // 夹进画面内，贴边时不至于把字切掉一半
-    fx.nums.push({
-      x: clamp(x, 70, W - 70),
-      y: clamp(y, 30, H - 24),
-      t: 0, dur: 1.0, text, color, size: size || 18
-    });
-  }
-
-  // 时间窗口内承受的伤害
   function takenBetween(f, from, to) {
-    let sum = 0;
+    let s = 0;
     for (const d of f.dmgLog) {
       const ago = clock - d.t;
-      if (ago >= from && ago < to) sum += d.amount;
+      if (ago >= from && ago < to) s += d.amount;
     }
-    return sum;
+    return s;
   }
 
-  // ============================================================
-  // 兔子：巨锤环绕
-  // ============================================================
+  // ==========================================================================
+  //  ⑦  兔子
+  // ==========================================================================
   function hammerHead() {
     const r = CFG.rabbit.hammer.orbitR + CFG.rabbit.hammer.len * 0.30;
-    return { x: rabbit.x + Math.cos(rState.ang) * r, y: rabbit.y + Math.sin(rState.ang) * r };
+    return { x: rabbit.x + Math.cos(R.ang) * r, y: rabbit.y + Math.sin(R.ang) * r };
   }
 
   function rabbitDamage() {
-    return Math.round(CFG.rabbit.atk * CFG.rabbit.dmgAtkRatio + rabbit.hp * CFG.rabbit.dmgHpRatio);
+    return Math.round(rabbit.atk * CFG.rabbit.dmgAtkRatio + rabbit.hp * CFG.rabbit.dmgHpRatio);
+  }
+
+  function castIce() {
+    const U = CFG.rabbit.ult;
+    const canCounter = S.moral.cd <= 0 && S.moral.air <= 0;
+    const countered = canCounter && Math.random() < CFG.slime.moral.counterChance;
+
+    R.ultUsed = true;
+    R.lockT = U.lockDur;
+    rabbit.invuln = U.lockDur;
+    R.iceT = U.iceDur;
+    R.freezeT = U.freeze;
+
+    sfxIce();
+    sfxFreeze();
+    showBanner('冰岛冲击');
+    shake(1.8);
+
+    rabbit.face = slime.x > rabbit.x ? 1 : -1;
+    slime.face = rabbit.x > slime.x ? 1 : -1;
+
+    if (countered) {
+      castMoral(true);
+      pending.push({
+        at: clock + 0.7, gen,
+        fn: () => {
+          showBanner('对轴成功 · 完全免疫');
+          addNum(slime.x, slime.y - slime.hh - 76, '对轴！', '#ffe6a6', 26);
+          for (let i = 0; i < 3; i++) {
+            fx.rings.push({ x: slime.x, y: slime.y, t: i * 0.1, dur: 0.8, r0: 10, r1: 150, color: '#c9a6ff', w: 3 });
+          }
+        }
+      });
+    } else {
+      pending.push({
+        at: clock + 0.55, gen,
+        fn: () => {
+          damage(slime, Math.round(slime.maxHp * U.dmgRatio), { source: rabbit, color: '#8fd8ff' });
+          if (slime.hp > 0) slime.stun = Math.max(slime.stun, U.stun);
+        }
+      });
+    }
   }
 
   function updateRabbit(dt) {
     if (rabbit.hp <= 0) return;
 
-    // ---- 破釜沉舟：生命低于阈值 → 锁血 + 冰岛冲击 ----
-    if (!rState.ultUsed && rabbit.hp <= rabbit.maxHp * CFG.rabbit.ult.hpThreshold) {
-      rState.ultUsed = true;
-      rState.lockT = CFG.rabbit.ult.lockDur;
-      rabbit.invuln = CFG.rabbit.ult.lockDur;
-      castIceImpact();
+    if (!R.ultUsed && rabbit.hp <= rabbit.maxHp * CFG.rabbit.ult.hpThreshold) castIce();
+
+    if (R.lockT > 0) {
+      R.lockT = Math.max(0, R.lockT - dt);
+      if (R.lockT === 0) rabbit.invuln = 0;
     }
-    if (rState.lockT > 0) {
-      rState.lockT = Math.max(0, rState.lockT - dt);
-      if (rState.lockT === 0) rabbit.invuln = 0;
-    }
+    if (R.iceT > 0) R.iceT = Math.max(0, R.iceT - dt);
+    if (R.tail > 0) R.tail = Math.max(0, R.tail - dt);
 
-    // ---- 巨锤 ----
-    if (rState.tail > 0) rState.tail = Math.max(0, rState.tail - dt);
+    if (rabbit.frozen > 0 || rabbit.stun > 0) { R.on = false; return; }
 
-    if (rabbit.stun > 0) { rState.on = false; return; }
+    const HM = CFG.rabbit.hammer;
 
-    if (!rState.on) {
-      rState.idle += dt;
-      if (rState.idle >= CFG.rabbit.hammer.period) {
-        rState.idle = 0;
-        rState.on = true;
-        rState.t = 0;
-        rState.hitDone = false;
-        rState.ang = Math.atan2(slime.y - rabbit.y, slime.x - rabbit.x) - 0.9;
+    if (!R.on) {
+      R.idle += dt;
+      if (R.idle >= HM.period) {
+        R.idle = 0; R.on = true; R.t = 0; R.hitDone = false;
+        R.ang = Math.atan2(slime.y - rabbit.y, slime.x - rabbit.x) - 0.9;
+        sfxOrbit();
 
-        // 太远先冲过去
         const d = Math.hypot(slime.x - rabbit.x, slime.y - rabbit.y);
-        if (d > 250) {
+        if (d > HM.dashGap) {
           const nx = (slime.x - rabbit.x) / d, ny = (slime.y - rabbit.y) / d;
-          const tx = clamp(slime.x - nx * 205, BORDER + rabbit.hw, W - BORDER - rabbit.hw);
-          const ty = clamp(slime.y - ny * 205, BORDER + rabbit.hh, H - BORDER - rabbit.hh);
-          fx.shock.push({ x0: rabbit.x, y0: rabbit.y, x1: tx, y1: ty, t: 0, dur: 0.3 });
-          rabbit.x = tx; rabbit.y = ty;
+          rabbit.x = clamp(slime.x - nx * 205, BORDER + rabbit.hw, W - BORDER - rabbit.hw);
+          rabbit.y = clamp(slime.y - ny * 205, BORDER + rabbit.hh, H - BORDER - rabbit.hh);
+          fx.rings.push({ x: rabbit.x, y: rabbit.y, t: 0, dur: 0.35, r0: 8, r1: 50, color: '#ffd08a', w: 3 });
         }
       }
       return;
     }
 
-    rState.t += dt;
-    rState.ang += dt * CFG.rabbit.hammer.spin * DEG;
+    R.t += dt;
+    R.ang += dt * HM.spin * DEG;
 
-    if (!rState.hitDone && slime.hp > 0) {
+    if (!R.hitDone && slime.hp > 0) {
       const hd = hammerHead();
-      const hit = Math.hypot(slime.x - hd.x, slime.y - hd.y) <= CFG.rabbit.hammer.hitR + slime.rc * 0.86;
-      if (hit) {
-        // 浮空时锤子打不到：仍然消耗这一次挥击判定，但显示免疫
-        const dealt = damage(slime, rabbitDamage(), { kind: 'ground', source: rabbit, color: '#ff4d2d' });
+      if (Math.hypot(slime.x - hd.x, slime.y - hd.y) <= HM.hitR + slime.rc * 0.86) {
+        const dealt = damage(slime, rabbitDamage(), { source: rabbit, color: '#ff4d2d' });
         if (dealt > 0) rabbit.hits++;
-        rState.hitDone = true;
-        fx.shock.push({ x: slime.x, y: slime.y, t: 0, dur: 0.45, r0: 6, r1: 76 });
-        const ddx = slime.x - rabbit.x, ddy = slime.y - rabbit.y;
-        const dd = Math.hypot(ddx, ddy) || 1;
-        if (slime.hp > 0 && slime.sky <= 0 && slime.stun <= 0) {
-          slime.vx = ddx / dd * 260;
-          slime.vy = ddy / dd * 260;
+        R.hitDone = true;
+        shake(0.8);
+        const dx = slime.x - rabbit.x, dy = slime.y - rabbit.y, dd = Math.hypot(dx, dy) || 1;
+        if (slime.hp > 0 && slime.sky <= 0 && slime.frozen <= 0) {
+          slime.vx = dx / dd * 250;
+          slime.vy = dy / dd * 250;
         }
       }
     }
 
-    if (rState.t >= CFG.rabbit.hammer.dur) {
-      rState.on = false;
-      rState.idle = 0;
-      rState.tail = 0.3;
-    }
+    if (R.t >= HM.dur) { R.on = false; R.idle = 0; R.tail = 0.3; }
   }
 
-  // 冰岛冲击（占位实现：全屏冰环 + 空中伤害 + 冰冻）
-  function castIceImpact() {
-    const dmg = CFG.rabbit.ult.dmg;
-    fx.shock.push({ x: rabbit.x, y: rabbit.y, t: 0, dur: 0.9, r0: 10, r1: Math.max(W, H) });
-    fx.shock.push({ x: rabbit.x, y: rabbit.y, t: 0.12, dur: 0.75, r0: 4, r1: Math.max(W, H) * 0.7 });
-    for (let i = 0; i < 18; i++) {
-      const a = Math.PI * 2 * (i / 18);
-      fx.sparks.push({
-        x: rabbit.x + Math.cos(a) * 20, y: rabbit.y + Math.sin(a) * 20,
-        t: 0.05, dur: 0.6, color: i % 2 ? '#e6faff' : '#8fd8ff'
-      });
-    }
-    addNum(rabbit.x, rabbit.y - rabbit.hh - 56, '冰岛冲击', '#bfefff', 26);
-    damage(slime, dmg, { kind: 'air', source: rabbit, color: '#8fd8ff' });
-    if (slime.hp > 0) slime.stun = Math.max(slime.stun, CFG.rabbit.ult.stun);
-  }
-
-  // ============================================================
-  // 史莱姆：喷球 + 两个技能
-  // ============================================================
-  function blobAt(x, y, r, gen) {
+  // ==========================================================================
+  //  ⑧  史莱姆
+  // ==========================================================================
+  function blobAt(x, y, r, g0) {
     return {
       x, y, vx: 0, vy: 0, sp: 0, r,
       dw: r * 2, dh: r * 2, hw: r, hh: r, rc: r,
-      gen, life: CFG.slime.spit.life, age: 0, wob: Math.random() * 6.28
+      gen: g0, life: CFG.slime.spit.life, age: 0, wob: Math.random() * 6.28
     };
   }
 
   function spit() {
-    const mx = slime.x + (slime.face || 1) * slime.hw * 0.52;
+    const mx = slime.x + (slime.face || 1) * slime.hw * 0.5;
     const my = slime.y + slime.hh * 0.12;
+    const SP = CFG.slime.spit;
 
     let prey = null;
     for (const b of blobs) if (b.gen === 0) { prey = b; break; }
@@ -576,33 +787,32 @@
     let ang, sp;
     if (prey) {
       ang = Math.atan2(prey.y - my, prey.x - mx) + (Math.random() - 0.5) * 0.05;
-      sp = CFG.slime.spit.speed * 1.16;
+      sp = SP.speed * 1.16;
     } else {
       let px = rabbit.x, py = rabbit.y;
       for (let k = 0; k < 2; k++) {
-        const tt = Math.hypot(px - mx, py - my) / CFG.slime.spit.speed;
+        const tt = Math.hypot(px - mx, py - my) / SP.speed;
         px = rabbit.x + rabbit.vx * tt * 0.85;
         py = rabbit.y + rabbit.vy * tt * 0.85;
       }
       px = clamp(px, BORDER + 20, W - BORDER - 20);
       py = clamp(py, BORDER + 20, H - BORDER - 20);
       ang = Math.atan2(py - my, px - mx) + (Math.random() - 0.5) * 0.12;
-      sp = CFG.slime.spit.speed;
+      sp = SP.speed;
     }
 
-    const b = blobAt(mx + Math.cos(ang) * 14, my + Math.sin(ang) * 14, CFG.slime.spit.r, 0);
+    const b = blobAt(mx + Math.cos(ang) * 14, my + Math.sin(ang) * 14, SP.r, 0);
     b.sp = sp; b.vx = Math.cos(ang) * sp; b.vy = Math.sin(ang) * sp;
     blobs.push(b);
-    while (blobs.length > CFG.slime.spit.maxBlobs) blobs.shift();
-
-    fx.ring.push({ x: mx, y: my, t: 0, dur: 0.3, r0: 4, r1: 30, color: '#8ef07a' });
+    while (blobs.length > SP.maxBlobs) blobs.shift();
+    fx.rings.push({ x: mx, y: my, t: 0, dur: 0.28, r0: 4, r1: 30, color: '#8ef07a', w: 2.4 });
+    sfxSpit();
   }
 
   function splitBlob(b) {
     const i = blobs.indexOf(b);
-    if (i < 0) return;
+    if (i < 0 || over) return;
     blobs.splice(i, 1);
-
     const base = Math.atan2(b.vy, b.vx);
     for (let k = 0; k < CFG.slime.spit.split; k++) {
       const a = base + (k % 2 === 0 ? 1 : -1) * (0.66 + Math.random() * 0.34);
@@ -611,25 +821,22 @@
       c.life = CFG.slime.spit.life * 0.72;
       blobs.push(c);
     }
-    fx.ring.push({ x: b.x, y: b.y, t: 0, dur: 0.42, r0: 4, r1: 54, color: '#b6ff8a' });
-    addNum(b.x, b.y - b.hh - 14, '分裂 x' + CFG.slime.spit.split, '#2f9e3f', 16);
+    fx.rings.push({ x: b.x, y: b.y, t: 0, dur: 0.4, r0: 5, r1: 56, color: '#b6ff8a', w: 3 });
+    addNum(b.x, b.y - b.hh - 16, '分裂 x' + CFG.slime.spit.split, '#2f9e3f', 16);
   }
 
   function updateBlobs(dt) {
     for (let i = blobs.length - 1; i >= 0; i--) {
       const b = blobs[i];
       if (!b) continue;
-      b.age += dt;
-      b.life -= dt;
+      b.age += dt; b.life -= dt;
       if (b.life <= 0) { blobs.splice(i, 1); continue; }
 
-      if (rabbit.hp > 0 && Math.hypot(rabbit.x - b.x, rabbit.y - b.y) <= b.r + rabbit.rc * 0.90) {
-        const dmg = Math.round(CFG.slime.atk * CFG.slime.spit.dmgRatio);
-        const dealt = damage(rabbit, dmg, { kind: 'ground', source: slime, color: '#2f9e3f' });
+      if (rabbit.hp > 0 && Math.hypot(rabbit.x - b.x, rabbit.y - b.y) <= b.r + rabbit.rc * 0.9) {
+        const dealt = damage(rabbit, Math.round(rabbit.maxHp * CFG.slime.spit.dmgRatio), { source: slime, color: '#2f9e3f' });
         if (dealt > 0) {
           slime.hits++;
-          const healAmt = Math.round(slime.maxHp * CFG.slime.lifesteal);
-          heal(slime, healAmt, '#2f9e3f');
+          heal(slime, Math.round(slime.maxHp * CFG.slime.lifesteal), '#2f9e3f');
         }
         blobs.splice(i, 1);
         continue;
@@ -641,122 +848,130 @@
           if (o === b || o.gen !== 0 || o.age >= b.age) continue;
           if (Math.hypot(o.x - b.x, o.y - b.y) <= o.r + b.r + 2) { by = o; break; }
         }
-        if (by) { splitBlob(b); continue; }
+        if (by) splitBlob(b);
       }
+    }
+  }
+
+  function castMoral(force) {
+    const M = CFG.slime.moral;
+    if (!force && S.moral.cd > 0) return;
+    S.moral.cd = M.cd;
+    S.moral.air = M.air;
+    slime.sky = M.air;
+
+    sfxMoral();
+    showBanner('站在道德制高点');
+    addNum(slime.x, slime.y - slime.hh - 60, '道德制高点', '#c9a6ff', 22);
+    for (let i = 0; i < 4; i++) {
+      fx.rings.push({ x: slime.x, y: slime.y, t: i * 0.08, dur: 0.7, r0: 10, r1: 120 + i * 26, color: '#c9a6ff', w: 3.4 });
+    }
+    for (let i = 0; i < 14; i++) {
+      const a = -Math.PI / 2 + (i - 6.5) * 0.13;
+      fx.sparks.push({
+        x: slime.x + Math.cos(a) * 70, y: slime.y + Math.sin(a) * 70,
+        t: 0.05 + i * 0.02, dur: 0.5, color: i % 2 ? '#ffe6a6' : '#c9a6ff'
+      });
+    }
+  }
+
+  function castHistory() {
+    const Hc = CFG.slime.history;
+    const prev = takenBetween(slime, Hc.lookBack, Hc.lookBack * 2);
+    const now = takenBetween(slime, 0, Hc.lookBack);
+    const healAmt = Math.round(prev * Hc.healRatio);
+    const reflect = Math.round(now * Hc.reflectRatio);
+
+    S.history.cd = Hc.cd;
+    S.history.mute = Hc.mute;
+    S.lastHeal = healAmt; S.lastReflect = reflect;
+
+    sfxHistory();
+    showBanner('历史的回眸');
+    addNum(slime.x, slime.y - slime.hh - 60, '历史的回眸', '#c9a6ff', 22);
+
+    for (let i = 0; i < 5; i++) {
+      fx.rings.push({ x: slime.x, y: slime.y, t: i * 0.07, dur: 0.9, r0: 130 - i * 18, r1: 10, color: '#a98bff', w: 2.6 });
+    }
+    for (let i = 0; i < 10; i++) {
+      const a = Math.random() * Math.PI * 2, r0 = rand(40, 110);
+      fx.shards.push({
+        x: slime.x + Math.cos(a) * r0, y: slime.y + Math.sin(a) * r0,
+        tx: slime.x, ty: slime.y, t: 0, dur: rand(0.35, 0.6), color: '#c9a6ff'
+      });
+    }
+
+    if (healAmt > 0) heal(slime, healAmt, '#7bd88f');
+    else addNum(slime.x + 40, slime.y - slime.hh - 16, '无旧伤', '#8a8a8a', 15);
+
+    if (reflect > 0) {
+      addNum(slime.x, slime.y - slime.hh - 90, '回溯 ' + reflect, '#a98bff', 19);
+      pending.push({
+        at: clock + 0.45, gen,
+        fn: () => { if (!over) damage(rabbit, reflect, { source: slime, color: '#a98bff' }); }
+      });
     }
   }
 
   function updateSlime(dt) {
     if (slime.hp <= 0) return;
+    const M = CFG.slime.moral, Hc = CFG.slime.history;
 
-    for (const k of ['moral', 'history']) {
-      if (sState[k].cd > 0) sState[k].cd = Math.max(0, sState[k].cd - dt);
+    if (S.moral.cd > 0) S.moral.cd = Math.max(0, S.moral.cd - dt);
+    if (S.history.cd > 0) S.history.cd = Math.max(0, S.history.cd - dt);
+
+    // 兔子血量进危险区后，史莱姆会「留技能」，专门等大招对轴
+    const savingForUlt = !R.ultUsed && rabbit.hp <= rabbit.maxHp * 0.42;
+
+    if (S.moral.air > 0) {
+      S.moral.air = Math.max(0, S.moral.air - dt);
+      slime.sky = S.moral.air;
+    } else if (S.moral.cd <= 0 && slime.frozen <= 0 && !savingForUlt) {
+      castMoral(false);
     }
 
-    // ---- 站在道德制高点 ----
-    if (sState.moral.air > 0) {
-      sState.moral.air = Math.max(0, sState.moral.air - dt);
-      slime.sky = sState.moral.air;
-    } else if (sState.moral.cd <= 0) {
-      sState.moral.cd = CFG.slime.moral.cd;
-      sState.moral.air = CFG.slime.moral.air;
-      slime.sky = CFG.slime.moral.air;
-      addNum(slime.x, slime.y - slime.hh - 44, '站在道德制高点', '#8a5cf6', 22);
-      fx.ring.push({ x: slime.x, y: slime.y, t: 0, dur: 0.6, r0: 8, r1: 90, color: '#8a5cf6' });
+    if (S.history.mute > 0) S.history.mute = Math.max(0, S.history.mute - dt);
+    if (S.history.cd <= 0 && S.history.mute <= 0 && slime.frozen <= 0) {
+      if (takenBetween(slime, 0, Hc.lookBack) >= slime.maxHp * Hc.needRatio) castHistory();
     }
 
-    // ---- 历史的回眸 ----
-    if (sState.history.mute > 0) {
-      sState.history.mute = Math.max(0, sState.history.mute - dt);
-      slime.mute = sState.history.mute;
-    }
-    if (sState.history.cd <= 0 && sState.history.mute <= 0) {
-      const recent = takenBetween(slime, 0, CFG.slime.history.lookBack);
-      if (recent >= slime.maxHp * CFG.slime.history.minDamageToCast) {
-        castHistory();
-      }
-    }
+    if (slime.stun > 0 || slime.frozen > 0 || S.history.mute > 0) return;
 
-    // ---- 喷球 ----
-    if (slime.stun > 0 || slime.mute > 0) return;
-
-    if (sState.chain > 0) {
-      sState.chainT -= dt;
-      if (sState.chainT <= 0) {
-        sState.chain -= 1;
-        sState.chainT = 0.34;
-        spit();
-      }
+    if (S.chain > 0) {
+      S.chainT -= dt;
+      if (S.chainT <= 0) { S.chain -= 1; S.chainT = CFG.slime.spit.chain; spit(); }
       return;
     }
-
-    sState.idle += dt;
-    if (sState.idle >= CFG.slime.spit.period) {
-      sState.idle = 0;
-      spit();
-      sState.chain = 1;
-      sState.chainT = 0.34;
+    S.idle += dt;
+    if (S.idle >= CFG.slime.spit.period) {
+      S.idle = 0; spit();
+      S.chain = 1; S.chainT = CFG.slime.spit.chain;
     }
   }
 
-  function castHistory() {
-    const cfg = CFG.slime.history;
-
-    // "10 秒前受到的伤害" → 上一个 10 秒窗口的承伤
-    const prev = takenBetween(slime, cfg.lookBack, cfg.lookBack * 2);
-    const now = takenBetween(slime, 0, cfg.lookBack);
-
-    const healAmt = Math.round(prev * cfg.healRatio);
-    const reflect = Math.round(now * cfg.reflectRatio);
-
-    sState.history.cd = cfg.cd;
-    sState.history.mute = cfg.mute;
-    slime.mute = cfg.mute;
-    sState.lastHeal = healAmt;
-    sState.lastReflect = reflect;
-
-    addNum(slime.x, slime.y - slime.hh - 44, '历史的回眸', '#8a5cf6', 22);
-    fx.ring.push({ x: slime.x, y: slime.y, t: 0, dur: 0.7, r0: 10, r1: 104, color: '#8a5cf6' });
-
-    if (healAmt > 0) heal(slime, healAmt, '#7bd88f');
-    else addNum(slime.x + 30, slime.y - slime.hh - 8, '无旧伤', '#8a8a8a', 15);
-
-    if (reflect > 0) {
-      // 延迟一拍打回去，看得清
-      fx.nums.push({ x: slime.x, y: slime.y - slime.hh - 70, t: 0, dur: 1.2, text: '回溯 ' + reflect, color: '#8a5cf6', size: 19 });
-      const myGen = gen;
-      pending.push({
-        at: clock + 0.42, gen: myGen,
-        fn: () => { if (!over && myGen === gen) damage(rabbit, reflect, { kind: 'air', source: slime, color: '#8a5cf6' }); }
-      });
-    }
-  }
-
-  // ============================================================
-  // 物理
-  // ============================================================
-  function keepSpeed(f, want) {
+  // ==========================================================================
+  //  ⑨  物理
+  // ==========================================================================
+  function keepSpeed(f) {
     const s = Math.hypot(f.vx, f.vy) || 1;
-    const k = (want || f.sp) / s;
-    f.vx *= k; f.vy *= k;
+    f.vx = f.vx / s * f.sp;
+    f.vy = f.vy / s * f.sp;
   }
 
-  function bounce(f) {
+  function bounce(o) {
     let hit = false;
-    if (f.x - f.hw < BORDER) { f.x = BORDER + f.hw; f.vx = Math.abs(f.vx); hit = true; }
-    else if (f.x + f.hw > W - BORDER) { f.x = W - BORDER - f.hw; f.vx = -Math.abs(f.vx); hit = true; }
-    if (f.y - f.hh < BORDER) { f.y = BORDER + f.hh; f.vy = Math.abs(f.vy); hit = true; }
-    else if (f.y + f.hh > H - BORDER) { f.y = H - BORDER - f.hh; f.vy = -Math.abs(f.vy); hit = true; }
-    if (hit) keepSpeed(f, f.sp);
+    if (o.x - o.hw < BORDER) { o.x = BORDER + o.hw; o.vx = Math.abs(o.vx); hit = true; }
+    else if (o.x + o.hw > W - BORDER) { o.x = W - BORDER - o.hw; o.vx = -Math.abs(o.vx); hit = true; }
+    if (o.y - o.hh < BORDER) { o.y = BORDER + o.hh; o.vy = Math.abs(o.vy); hit = true; }
+    else if (o.y + o.hh > H - BORDER) { o.y = H - BORDER - o.hh; o.vy = -Math.abs(o.vy); hit = true; }
+    if (hit && o.sp) keepSpeed(o);
   }
 
   function collide(a, b) {
     const dx = b.x - a.x, dy = b.y - a.y;
-    const dist = Math.hypot(dx, dy);
-    const min = a.rc + b.rc;
-    if (!dist || dist >= min) return;
-    const nx = dx / dist, ny = dy / dist;
-    const ov = (min - dist) / 2;
+    const d = Math.hypot(dx, dy), min = a.rc + b.rc;
+    if (!d || d >= min) return;
+    const nx = dx / d, ny = dy / d, ov = (min - d) / 2;
     a.x -= nx * ov; a.y -= ny * ov;
     b.x += nx * ov; b.y += ny * ov;
     const va = a.vx * nx + a.vy * ny, vb = b.vx * nx + b.vy * ny;
@@ -764,37 +979,43 @@
     const s = va - vb;
     a.vx -= s * nx; a.vy -= s * ny;
     b.vx += s * nx; b.vy += s * ny;
-    keepSpeed(a, a.sp); keepSpeed(b, b.sp);
+    if (a.sp) keepSpeed(a);
+    if (b.sp) keepSpeed(b);
   }
 
   function step(dt) {
     const sub = 4, h = dt / sub;
     for (let s = 0; s < sub; s++) {
       for (const f of fighters) {
-        if (f.stun > 0) continue;
-        f.x += f.vx * h;
-        f.y += f.vy * h;
+        if (f.stun > 0 || f.frozen > 0) continue;
+        f.x += f.vx * h; f.y += f.vy * h;
       }
       for (const b of blobs) { b.x += b.vx * h; b.y += b.vy * h; }
-
       for (const f of fighters) bounce(f);
       for (const b of blobs) bounce(b);
-
       collide(rabbit, slime);
-      for (let i = 0; i < blobs.length; i++) {
+      for (let i = 0; i < blobs.length; i++)
         for (let j = i + 1; j < blobs.length; j++) collide(blobs[i], blobs[j]);
-      }
     }
   }
 
-  // ============================================================
-  // 主更新
-  // ============================================================
+  let shakeAmp = 0;
+  function shake(v) { shakeAmp = Math.max(shakeAmp, v * CFG.feel.shake); }
+
+  // ==========================================================================
+  //  ⑩  主循环
+  // ==========================================================================
   function update(dt) {
     if (over) return;
     clock += dt;
 
-    step(dt);
+    if (R.freezeT > 0) {
+      R.freezeT = Math.max(0, R.freezeT - dt);
+      rabbit.frozen = R.freezeT;
+      slime.frozen = R.freezeT;
+    } else {
+      step(dt);
+    }
 
     for (const f of fighters) {
       if (f.stun > 0) {
@@ -802,16 +1023,13 @@
         if (f.stun <= 0) {
           f.stun = 0;
           const a = Math.random() * Math.PI * 2;
-          f.vx = Math.cos(a) * f.sp;
-          f.vy = Math.sin(a) * f.sp;
+          f.vx = Math.cos(a) * f.sp; f.vy = Math.sin(a) * f.sp;
         }
       }
       if (f.flash > 0) f.flash = Math.max(0, f.flash - dt);
       if (f.shake > 0) f.shake = Math.max(0, f.shake - dt);
       if (f.squash > 0) f.squash = Math.max(0, f.squash - dt);
-      if (Math.abs(f.vx) > 20 && f.stun <= 0) f.face = f.vx > 0 ? 1 : -1;
-
-      // 日志裁剪
+      if (f.frozen <= 0 && f.stun <= 0 && Math.abs(f.vx) > 20) f.face = f.vx > 0 ? 1 : -1;
       while (f.dmgLog.length && clock - f.dmgLog[0].t > 30) f.dmgLog.shift();
     }
 
@@ -826,135 +1044,200 @@
     }
 
     for (const k in fx) {
+      if (k === 'snow') continue;
       const arr = fx[k];
       for (let i = arr.length - 1; i >= 0; i--) {
         arr[i].t += dt;
         if (arr[i].t >= arr[i].dur) arr.splice(i, 1);
       }
     }
+
+    for (const s of fx.snow) {
+      s.y += s.sp * dt;
+      s.x += s.drift * dt;
+      if (s.y > H + 4) { s.y = -4; s.x = Math.random() * W; }
+      if (s.x < -4) s.x = W + 4;
+      if (s.x > W + 4) s.x = -4;
+    }
+
+    if (shakeAmp > 0) shakeAmp = Math.max(0, shakeAmp - dt * 6.5);
   }
 
-  // ============================================================
-  // 渲染
-  // ============================================================
-  function drawBg() {
-    ctx.fillStyle = '#0fb6f5';
-    ctx.fillRect(-20, -20, W + 40, H + 40);
-
-    // 网格，让位移看得出来
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,.10)';
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= W; x += 60) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  // ==========================================================================
+  //  ⑪  渲染
+  // ==========================================================================
+  function drawBackdrop() {
+    if (R.iceT > 0 && img.ice.complete && img.ice.naturalWidth) {
+      const p = 1 - R.iceT / CFG.rabbit.ult.iceDur;
+      const z = 1 + 0.07 * p;
+      const iw = img.ice.naturalWidth, ih = img.ice.naturalHeight;
+      const k = Math.max(W / iw, H / ih) * z;
+      const dw = iw * k, dh = ih * k;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, R.iceT / 0.35);
+      ctx.drawImage(img.ice, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      ctx.fillStyle = 'rgba(10,42,63,.34)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      return;
     }
-    for (let y = 0; y <= H; y += 60) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+
+    ctx.fillStyle = '#11b4f3';
+    ctx.fillRect(-20, -20, W + 40, H + 40);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,.09)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= W; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y <= H; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function drawSnow() {
+    if (R.iceT <= 0) return;
+    const a0 = Math.min(1, R.iceT / 0.4);
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    for (const s of fx.snow) {
+      ctx.globalAlpha = s.a * a0;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
   }
 
   function drawChar(f) {
-    if (!f.ready) return;
     const dying = f.hp <= 0;
     const sk = f.shake > 0 ? f.shake / 0.3 : 0;
     const ox = sk ? Math.sin(clock * 86) * 4.4 * sk : 0;
     const oy = sk ? Math.cos(clock * 71) * 2.6 * sk : 0;
     const sq = f.squash > 0 ? f.squash / 0.24 : 0;
-    const floatY = f.sky > 0 ? -52 - Math.sin(clock * 2.4) * 5 : 0;
+    const floatY = f.sky > 0 ? -56 - Math.sin(clock * 2.4) * 6 : 0;
 
     ctx.save();
-    if (dying) ctx.globalAlpha = 0.35;
-    ctx.translate(f.x + ox, f.y + oy + floatY);
-
-    // 浮空影子留在地面
-    if (f.sky > 0) {
-      ctx.restore();
-      ctx.save();
-      ctx.globalAlpha = 0.18;
-      ctx.fillStyle = '#0a2a3f';
-      ctx.beginPath();
-      ctx.ellipse(f.x, f.y + f.hh * 0.86, f.hw * 0.7, f.hw * 0.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      ctx.save();
-      ctx.translate(f.x + ox, f.y + oy + floatY);
-    }
-
-    if (sq > 0) ctx.scale(1 + 0.10 * sq, 1 - 0.10 * sq);
-    if (f.side === 'right') ctx.scale(-1, 1);
-    ctx.drawImage(f.img, -f.hw, -f.hh, f.dw, f.dh);
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = '#062033';
+    ctx.beginPath();
+    ctx.ellipse(f.x, f.y + f.hh * 0.88 + 6, f.hw * 0.78, f.hw * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
 
-    // 浮空光环
     if (f.sky > 0) {
+      const top = f.y + floatY - f.hh;
+      const g = ctx.createLinearGradient(0, top - 70, 0, f.y + f.hh);
+      g.addColorStop(0, 'rgba(201,166,255,0)');
+      g.addColorStop(0.55, 'rgba(201,166,255,.36)');
+      g.addColorStop(1, 'rgba(201,166,255,0)');
       ctx.save();
-      ctx.globalAlpha = 0.8;
-      ctx.strokeStyle = '#8a5cf6';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([8, 9]);
-      ctx.lineDashOffset = -clock * 40;
+      ctx.fillStyle = g;
+      ctx.fillRect(f.x - f.hw * 1.55, top - 70, f.hw * 3.1, f.hh * 2 + 80);
+      ctx.restore();
+    }
+
+    ctx.save();
+    if (dying) ctx.globalAlpha = 0.3;
+    ctx.translate(f.x + ox, f.y + oy + floatY);
+    if (sq > 0) ctx.scale(1 + 0.1 * sq, 1 - 0.1 * sq);
+    if (f.face < 0) ctx.scale(-1, 1);
+    ctx.drawImage(img[f.key], -f.hw, -f.hh, f.dw, f.dh);
+    ctx.restore();
+
+    if (!dying && f.flash > 0) {
+      ctx.save();
+      ctx.globalAlpha = (f.flash / 0.2) * 0.45;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.translate(f.x + ox, f.y + oy + floatY);
+      if (f.face < 0) ctx.scale(-1, 1);
+      ctx.drawImage(img[f.key], -f.hw, -f.hh, f.dw, f.dh);
+      ctx.restore();
+    }
+
+    if (f.sky > 0) {
+      for (let i = 0; i < 3; i++) {
+        ctx.save();
+        ctx.globalAlpha = 0.55 - i * 0.13;
+        ctx.strokeStyle = i === 0 ? '#ffe6a6' : '#c9a6ff';
+        ctx.lineWidth = 3 - i * 0.6;
+        ctx.beginPath();
+        ctx.ellipse(f.x, f.y + floatY + i * 14, f.hw * (1.1 + i * 0.16), f.hw * (0.34 + i * 0.07), 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    if (f.invuln > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.45 + 0.25 * Math.sin(clock * 12);
+      ctx.strokeStyle = '#ff9a8a';
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(f.x, f.y + floatY, f.hw * 1.18, 0, Math.PI * 2);
+      ctx.arc(f.x, f.y + floatY, Math.max(f.hw, f.hh) * 1.22, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
 
-    // 锁血护盾
-    if (f.invuln > 0) {
+    if (f.frozen > 0) {
       ctx.save();
-      ctx.globalAlpha = 0.55 + 0.25 * Math.sin(clock * 12);
-      ctx.strokeStyle = '#bfefff';
-      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = '#9fe3ff';
       ctx.beginPath();
-      ctx.arc(f.x, f.y, Math.max(f.hw, f.hh) * 1.25, 0, Math.PI * 2);
+      ctx.ellipse(f.x, f.y + floatY, f.hw * 1.16, f.hh * 1.12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = '#e6faff';
+      ctx.lineWidth = 2.4;
       ctx.stroke();
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2 + 0.3, rr = f.hw;
+        ctx.beginPath();
+        ctx.moveTo(f.x + Math.cos(a) * rr * 0.4, f.y + floatY + Math.sin(a) * rr * 0.4);
+        ctx.lineTo(f.x + Math.cos(a) * rr * 1.1, f.y + floatY + Math.sin(a) * rr * 1.1);
+        ctx.stroke();
+      }
       ctx.restore();
     }
   }
 
   function drawHammer() {
-    if (!hammer.ready || rabbit.hp <= 0) return;
-    if (!rState.on) return;
-
-    const cx = clamp(rabbit.x, 70, W - 70);
-    const cy = clamp(rabbit.y, 70, H - 70);
-    const R = CFG.rabbit.hammer.orbitR;
+    if (!img.hammer.complete || !img.hammer.naturalWidth || rabbit.hp <= 0) return;
+    if (!R.on) return;
+    const HM = CFG.rabbit.hammer;
+    const cx = clamp(rabbit.x, 80, W - 80), cy = clamp(rabbit.y, 80, H - 80);
 
     ctx.save();
-    ctx.globalAlpha = 0.26;
-    ctx.strokeStyle = '#ffe08a';
+    ctx.globalAlpha = 0.22;
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
-    ctx.setLineDash([9, 11]);
-    ctx.lineDashOffset = -clock * 70;
+    ctx.setLineDash([9, 12]);
+    ctx.lineDashOffset = -clock * 60;
     ctx.beginPath();
-    ctx.arc(cx, cy, R + CFG.rabbit.hammer.len * 0.30, 0, Math.PI * 2);
+    ctx.arc(cx, cy, HM.orbitR + HM.len * 0.3, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
 
-    for (let i = 3; i >= 0; i--) {
-      const a = rState.ang - i * 0.15;
+    const s = HM.len / img.hammer.naturalWidth;
+    const dw = HM.len, dh = img.hammer.naturalHeight * s;
+
+    for (let i = 4; i >= 0; i--) {
+      const a = R.ang - i * 0.13;
       ctx.save();
-      ctx.globalAlpha = i === 0 ? 1 : Math.max(0, 0.3 - i * 0.075);
-      ctx.translate(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+      ctx.globalAlpha = i === 0 ? 1 : Math.max(0, 0.26 - i * 0.05);
+      ctx.translate(cx + Math.cos(a) * HM.orbitR, cy + Math.sin(a) * HM.orbitR);
       ctx.rotate(a);
-      ctx.drawImage(hammer.img, -hammer.dw / 2, -hammer.dh / 2, hammer.dw, hammer.dh);
+      ctx.drawImage(img.hammer, -dw / 2, -dh / 2, dw, dh);
       ctx.restore();
     }
   }
 
   function drawBlobs() {
     for (const b of blobs) {
-      let alpha = 1;
-      if (b.life < 1.2) alpha = Math.max(0, b.life / 1.2);
+      let a = 1;
+      if (b.life < 1.2) a = Math.max(0, b.life / 1.2);
       const wob = 1 + 0.09 * Math.sin(b.wob + clock * 9);
       const sp = Math.hypot(b.vx, b.vy) || 1;
-      const stretch = Math.min(1.20, 1 + sp / 2800);
-      const ang = Math.atan2(b.vy, b.vx);
-      const r = b.r;
+      const stretch = Math.min(1.18, 1 + sp / 3000);
+      const ang = Math.atan2(b.vy, b.vx), r = b.r;
 
       ctx.save();
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = a;
       ctx.translate(b.x, b.y);
       ctx.rotate(ang);
       ctx.scale(stretch, wob / stretch);
@@ -964,17 +1247,17 @@
       g.addColorStop(1, '#2f8f2a');
       ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.fillStyle = g; ctx.fill();
-      ctx.lineWidth = Math.max(2, r * 0.15);
-      ctx.strokeStyle = '#123d18'; ctx.stroke();
+      ctx.lineWidth = Math.max(2, r * 0.16);
+      ctx.strokeStyle = '#123d18';
+      ctx.stroke();
       ctx.restore();
 
       ctx.save();
-      ctx.globalAlpha = alpha;
-      const ex = r * 0.34, ey = r * 0.16;
+      ctx.globalAlpha = a;
       ctx.fillStyle = '#123d18';
       ctx.beginPath();
-      ctx.ellipse(b.x - ex, b.y - ey, r * 0.11, r * 0.16, 0, 0, Math.PI * 2);
-      ctx.ellipse(b.x + ex, b.y - ey, r * 0.11, r * 0.16, 0, 0, Math.PI * 2);
+      ctx.ellipse(b.x - r * 0.34, b.y - r * 0.16, r * 0.11, r * 0.16, 0, 0, Math.PI * 2);
+      ctx.ellipse(b.x + r * 0.34, b.y - r * 0.16, r * 0.11, r * 0.16, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#123d18';
       ctx.lineWidth = Math.max(1.4, r * 0.09);
@@ -985,32 +1268,74 @@
     }
   }
 
-  function drawFx() {
-    for (const s of fx.shock) {
-      const p = s.t / s.dur;
-      ctx.save();
-      ctx.globalAlpha = (1 - p) * 0.75;
-      ctx.strokeStyle = '#ffe08a';
-      ctx.lineWidth = 2.5 * (1 - p) + 0.6;
-      ctx.beginPath();
-      ctx.arc(s.x0, s.y0, 60 * (1 - p), 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(s.x0, s.y0);
-      ctx.lineTo(s.x1, s.y1);
-      ctx.stroke();
-      ctx.restore();
+  function crossPath(g, cx, cy, s, t) {
+    const a = s / 2, b = s * t / 2;
+    g.beginPath();
+    g.moveTo(cx - b, cy - a); g.lineTo(cx + b, cy - a); g.lineTo(cx + b, cy - b);
+    g.lineTo(cx + a, cy - b); g.lineTo(cx + a, cy + b); g.lineTo(cx + b, cy + b);
+    g.lineTo(cx + b, cy + a); g.lineTo(cx - b, cy + a); g.lineTo(cx - b, cy + b);
+    g.lineTo(cx - a, cy + b); g.lineTo(cx - a, cy - b); g.lineTo(cx - b, cy - b);
+    g.closePath();
+  }
+
+  function drawHp(f) {
+    const s = 70, th = 0.46;
+    const floatY = f.sky > 0 ? -56 : 0;
+    let cy = f.y + floatY - f.hh - s / 2 - 10;
+    if (cy - s / 2 < 6) cy = f.y + floatY + f.hh + s / 2 + 12;
+    const cx = clamp(f.x, s / 2 + 6, W - s / 2 - 6);
+    const ratio = clamp(f.hp / f.maxHp, 0, 1);
+    const txt = String(Math.round(f.hp));
+
+    ctx.save();
+    crossPath(ctx, cx, cy, s, th);
+    ctx.fillStyle = '#08161f';
+    ctx.fill();
+
+    ctx.save();
+    crossPath(ctx, cx, cy, s, th);
+    ctx.clip();
+    const bottom = cy + s / 2;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(cx - s / 2, bottom - s, s, s);
+    const grd = ctx.createLinearGradient(0, bottom - s * ratio, 0, bottom);
+    grd.addColorStop(0, '#ff6a5a');
+    grd.addColorStop(1, '#d61b14');
+    ctx.fillStyle = grd;
+    ctx.fillRect(cx - s / 2, bottom - s * ratio, s, s * ratio);
+    ctx.restore();
+
+    crossPath(ctx, cx, cy, s, th);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(6,20,32,.75)';
+    ctx.stroke();
+
+    let fs = Math.round(s * 0.34);
+    ctx.font = '900 ' + fs + 'px "PingFang SC",sans-serif';
+    while (fs > 8 && ctx.measureText(txt).width > s - 18) {
+      fs -= 1;
+      ctx.font = '900 ' + fs + 'px "PingFang SC",sans-serif';
     }
-    for (const r of fx.ring) {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(2, fs * 0.22);
+    ctx.strokeStyle = 'rgba(6,20,32,.9)';
+    ctx.strokeText(txt, cx, cy + 1);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(txt, cx, cy + 1);
+    ctx.restore();
+  }
+
+  function drawFx() {
+    for (const r of fx.rings) {
       const p = r.t / r.dur;
       const rad = r.r0 + (r.r1 - r.r0) * (1 - Math.pow(1 - p, 2));
       ctx.save();
-      ctx.globalAlpha = (1 - p) * 0.8;
+      ctx.globalAlpha = (1 - p) * 0.85;
       ctx.strokeStyle = r.color;
-      ctx.lineWidth = 2.2 * (1 - p) + 0.6;
-      ctx.beginPath();
-      ctx.arc(r.x, r.y, rad, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.lineWidth = (r.w || 2.4) * (1 - p) + 0.6;
+      ctx.beginPath(); ctx.arc(r.x, r.y, rad, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
     }
     for (const s of fx.sparks) {
@@ -1018,12 +1343,11 @@
       ctx.save();
       ctx.globalAlpha = 1 - p;
       ctx.strokeStyle = s.color;
-      ctx.lineWidth = 1.4;
+      ctx.lineWidth = 1.6;
       ctx.lineCap = 'round';
       for (let i = 0; i < 7; i++) {
         const a = (i / 7) * Math.PI * 2 + 0.4;
-        const r0 = 4 + p * 14;
-        const r1 = r0 + 5 * (1 - p);
+        const r0 = 5 + p * 16, r1 = r0 + 6 * (1 - p);
         ctx.beginPath();
         ctx.moveTo(s.x + Math.cos(a) * r0, s.y + Math.sin(a) * r0);
         ctx.lineTo(s.x + Math.cos(a) * r1, s.y + Math.sin(a) * r1);
@@ -1031,17 +1355,28 @@
       }
       ctx.restore();
     }
+    for (const s of fx.shards) {
+      const p = s.t / s.dur;
+      const x = s.x + (s.tx - s.x) * p, y = s.y + (s.ty - s.y) * p;
+      ctx.save();
+      ctx.globalAlpha = (1 - p) * 0.9;
+      ctx.fillStyle = s.color;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 4); ctx.lineTo(x + 3, y); ctx.lineTo(x, y + 4); ctx.lineTo(x - 3, y);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
     for (const n of fx.nums) {
       const p = n.t / n.dur;
       ctx.save();
-      ctx.globalAlpha = p < 0.1 ? p / 0.1 : (p > 0.72 ? Math.max(0, 1 - (p - 0.72) / 0.28) : 1);
-      ctx.font = '800 ' + n.size + 'px "PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.globalAlpha = p < 0.1 ? p / 0.1 : (p > 0.7 ? Math.max(0, 1 - (p - 0.7) / 0.3) : 1);
+      ctx.font = '900 ' + n.size + 'px "PingFang SC","Microsoft YaHei",sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const y = n.y - p * 26;
-      ctx.lineWidth = Math.max(2.6, n.size * 0.16);
+      const y = n.y - p * 28;
+      ctx.lineWidth = Math.max(3, n.size * 0.18);
       ctx.lineJoin = 'round';
-      ctx.strokeStyle = 'rgba(8,32,47,.55)';
+      ctx.strokeStyle = 'rgba(6,20,32,.72)';
       ctx.strokeText(n.text, n.x, y);
       ctx.fillStyle = n.color;
       ctx.fillText(n.text, n.x, y);
@@ -1049,226 +1384,254 @@
     }
   }
 
-  function drawHp(f) {
-    const w = 120, h = 12;
-    const x = clamp(f.x - w / 2, 4, W - w - 4);
-    // 血条跟着浮空一起抬起来；头顶放不下时翻到脚下，避免被画框切掉
-    const floatY = f.sky > 0 ? -52 - Math.sin(clock * 2.4) * 5 : 0;
-    let y = f.y + floatY - f.hh - (f.sky > 0 ? 26 : 44);
-    if (y < 6) y = f.y + floatY + f.hh + 10;
-    if (y > H - h - 6) y = f.y - f.hh - 44;
-    const ratio = clamp(f.hp / f.maxHp, 0, 1);
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(8,32,47,.55)';
-    ctx.beginPath();
-    ctx.roundRect(x - 2, y - 2, w + 4, h + 4, 5);
-    ctx.fill();
-    ctx.fillStyle = '#dfe9f0';
-    ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = ratio <= 0.2 ? '#e0552f' : '#2f9e3f';
-    ctx.fillRect(x, y, w * ratio, h);
-    ctx.strokeStyle = 'rgba(255,255,255,.85)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '700 11px "PingFang SC",sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.strokeStyle = 'rgba(8,32,47,.75)';
-    ctx.lineWidth = 2.4;
-    ctx.strokeText(Math.round(f.hp) + ' / ' + f.maxHp, x + w / 2, y + h / 2);
-    ctx.fillText(Math.round(f.hp) + ' / ' + f.maxHp, x + w / 2, y + h / 2);
-    ctx.restore();
-  }
-
   function render() {
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    drawBg();
+    ctx.save();
+    if (shakeAmp > 0.01) {
+      ctx.translate(Math.sin(clock * 97) * shakeAmp * 7, Math.cos(clock * 79) * shakeAmp * 5);
+    }
+    drawBackdrop();
     drawBlobs();
     for (const f of fighters) drawChar(f);
     drawHammer();
     drawFx();
     for (const f of fighters) drawHp(f);
+    drawSnow();
+    ctx.restore();
   }
 
-  // ============================================================
-  // UI
-  // ============================================================
-  function fmt(n) { return Math.round(n).toLocaleString('en-US'); }
+  // ==========================================================================
+  //  ⑫  HUD / 详细 / 参数
+  // ==========================================================================
+  const fmt = n => Math.round(n).toLocaleString('en-US');
 
-  function skillCard(id, name, note) {
+  function skillCard(id, ico, name) {
     return '<div class="sk" id="' + id + '">'
-      + '<div class="sk-head"><span class="sk-name">' + name + '</span><span class="sk-cd">—</span></div>'
+      + '<div class="sk-ico">' + ico + '</div>'
+      + '<div class="sk-main">'
+      + '<div class="sk-name">' + name + '</div>'
+      + '<div class="sk-line"><b>—</b><span>—</span></div>'
       + '<div class="sk-bar"><i></i></div>'
-      + '<div class="sk-note">' + note + '</div></div>';
-  }
-
-  function buildPanels() {
-    document.getElementById('sideA').innerHTML =
-      '<div class="fighter">'
-      + '<div class="top"><img class="avatar" src="' + IMG.a + '">'
-      + '<div><div class="fname">兔子</div><div class="fsub">生命 10,000 · 攻击 3,000</div></div></div>'
-      + '<div class="hpbar" id="hpA"><i></i></div>'
-      + '<div class="hptxt"><span id="hpTxtA">10000 / 10000</span><span id="dpsA">—</span></div>'
-      + '<div class="skills">'
-      + skillCard('skHammer', '巨锤环绕', '3.4s 一次 · 70%攻击 + 1%当前生命')
-      + skillCard('skUlt', '冰岛冲击', '生命低于 20% 自动锁血释放')
-      + '</div></div>';
-
-    document.getElementById('sideB').innerHTML =
-      '<div class="fighter">'
-      + '<div class="top"><img class="avatar" src="' + IMG.b + '">'
-      + '<div><div class="fname">史莱姆</div><div class="fsub">生命 10,000 · 攻击 3,000</div></div></div>'
-      + '<div class="hpbar" id="hpB"><i></i></div>'
-      + '<div class="hptxt"><span id="hpTxtB">10000 / 10000</span><span id="dpsB">—</span></div>'
-      + '<div class="skills">'
-      + skillCard('skMoral', '站在道德制高点', '浮空 5s · 免疫地面伤害')
-      + skillCard('skHistory', '历史的回眸', '回血 + 反弹 + 停手 10s')
       + '</div></div>';
   }
 
-  function setSkill(id, mode, cdTxt, pct) {
+  function buildHud() {
+    document.getElementById('hudA').innerHTML =
+      '<div class="card">'
+      + '<div class="card-top"><img class="avatar" src="' + IMG_SRC.a + '">'
+      + '<div class="who">兔子<small>生命 ' + fmt(CFG.rabbit.maxHp) + ' · 攻击 ' + fmt(CFG.rabbit.atk) + '</small></div></div>'
+      + '<div class="bar" id="barA"><i></i><b>10000</b></div>'
+      + '<div class="stat"><span id="hpA">10000</span><span id="dpsA">DPS 0</span></div>'
+      + '<div class="skills">'
+      + skillCard('skHammer', ICON.hammer, '巨锤环绕')
+      + skillCard('skUlt', ICON.ice, '冰岛冲击')
+      + '</div></div>';
+
+    document.getElementById('hudB').innerHTML =
+      '<div class="card">'
+      + '<div class="card-top"><img class="avatar" src="' + IMG_SRC.b + '">'
+      + '<div class="who">史莱姆<small>生命 ' + fmt(CFG.slime.maxHp) + ' · 攻击 ' + fmt(CFG.slime.atk) + '</small></div></div>'
+      + '<div class="bar" id="barB"><i></i><b>10000</b></div>'
+      + '<div class="stat"><span id="hpB">10000</span><span id="dpsB">DPS 0</span></div>'
+      + '<div class="skills">'
+      + skillCard('skMoral', ICON.moral, '站在道德制高点')
+      + skillCard('skHistory', ICON.history, '历史的回眸')
+      + '</div></div>';
+  }
+
+  function setSkill(id, cls, state, remain, ratio) {
     const el = document.getElementById(id);
     if (!el) return;
-    el.classList.toggle('ready', mode === 'ready');
-    el.classList.toggle('active', mode === 'active');
-    el.querySelector('.sk-cd').textContent = cdTxt;
-    el.querySelector('.sk-bar i').style.width = Math.round(clamp(pct, 0, 1) * 100) + '%';
+    el.className = 'sk' + (cls ? ' ' + cls : '');
+    el.querySelector('.sk-line b').textContent = state;
+    el.querySelector('.sk-line span').textContent = remain;
+    el.querySelector('.sk-bar i').style.width = Math.round(clamp(ratio, 0, 1) * 100) + '%';
   }
 
-  let uiTick = 0;
+  let uiAcc = 0;
   function updateUI(dt) {
-    uiTick += dt;
-    if (uiTick < 0.08) return;
-    uiTick = 0;
+    uiAcc += dt;
+    if (uiAcc < 0.08) return;
+    uiAcc = 0;
 
-    // 血条
-    for (const [f, suf] of [[rabbit, 'A'], [slime, 'B']]) {
-      const bar = document.getElementById('hp' + suf);
+    for (const pair of [[rabbit, 'A'], [slime, 'B']]) {
+      const f = pair[0], suf = pair[1];
       const ratio = clamp(f.hp / f.maxHp, 0, 1);
+      const bar = document.getElementById('bar' + suf);
       bar.querySelector('i').style.width = (ratio * 100).toFixed(1) + '%';
-      bar.classList.toggle('low', ratio <= 0.2);
-      document.getElementById('hpTxt' + suf).textContent = fmt(f.hp) + ' / ' + fmt(f.maxHp);
-      const dps = clock > 0.5 ? f.dealt / clock : 0;
-      document.getElementById('dps' + suf).textContent = 'DPS ' + fmt(dps);
+      bar.querySelector('b').textContent = fmt(f.hp);
+      document.getElementById('hp' + suf).textContent = fmt(f.hp) + ' / ' + fmt(f.maxHp);
+      document.getElementById('dps' + suf).textContent = 'DPS ' + fmt(clock > 0.5 ? f.dealt / clock : 0);
     }
 
-    // 兔子：巨锤
-    const h = CFG.rabbit.hammer;
-    if (rState.on) {
-      setSkill('skHammer', 'active', '挥击 ' + (h.dur - rState.t).toFixed(1) + 's', 1 - rState.t / h.dur);
+    const HM = CFG.rabbit.hammer;
+    if (R.on) setSkill('skHammer', 'active', '挥击中', (HM.dur - R.t).toFixed(1) + 's', 1 - R.t / HM.dur);
+    else {
+      const left = Math.max(0, HM.period - R.idle);
+      setSkill('skHammer', left <= 0.05 ? 'ready' : '', left <= 0.05 ? '就绪' : '冷却', left.toFixed(1) + 's', 1 - left / HM.period);
+    }
+
+    if (!R.ultUsed) {
+      const need = clamp((rabbit.hp / rabbit.maxHp - CFG.rabbit.ult.hpThreshold) / (1 - CFG.rabbit.ult.hpThreshold), 0, 1);
+      setSkill('skUlt', 'ready', '待触发', Math.round(rabbit.hp / rabbit.maxHp * 100) + '%', need);
+    } else if (R.lockT > 0) {
+      setSkill('skUlt', 'lock', '锁血中', R.lockT.toFixed(1) + 's', R.lockT / CFG.rabbit.ult.lockDur);
+    } else if (R.iceT > 0) {
+      setSkill('skUlt', 'active', '冰岛展开', R.iceT.toFixed(1) + 's', R.iceT / CFG.rabbit.ult.iceDur);
     } else {
-      const left = Math.max(0, h.period - rState.idle);
-      setSkill('skHammer', left <= 0.05 ? 'ready' : '', left <= 0.05 ? '就绪' : left.toFixed(1) + 's', 1 - left / h.period);
+      setSkill('skUlt', '', '已释放', '—', 0);
     }
 
-    // 兔子：冰岛冲击
-    if (rState.ultUsed) {
-      const locking = rState.lockT > 0;
-      setSkill('skUlt', locking ? 'active' : '', locking ? '锁血 ' + rState.lockT.toFixed(1) + 's' : '已释放', locking ? rState.lockT / CFG.rabbit.ult.lockDur : 0);
-    } else {
-      const hpPct = rabbit.hp / rabbit.maxHp;
-      const need = clamp((hpPct - CFG.rabbit.ult.hpThreshold) / (1 - CFG.rabbit.ult.hpThreshold), 0, 1);
-      setSkill('skUlt', 'ready', '待触发 ' + Math.round(hpPct * 100) + '%', need);
-    }
+    const M = CFG.slime.moral;
+    if (S.moral.air > 0) setSkill('skMoral', 'active', '浮空免疫', S.moral.air.toFixed(1) + 's', S.moral.air / M.air);
+    else if (S.moral.cd > 0) setSkill('skMoral', '', '冷却', S.moral.cd.toFixed(1) + 's', 1 - S.moral.cd / M.cd);
+    else setSkill('skMoral', 'ready', '就绪', '✓', 1);
 
-    // 史莱姆：道德制高点
-    const m = sState.moral;
-    if (m.air > 0) {
-      setSkill('skMoral', 'active', '浮空 ' + m.air.toFixed(1) + 's', m.air / CFG.slime.moral.air);
-    } else if (m.cd > 0) {
-      setSkill('skMoral', '', m.cd.toFixed(1) + 's', 1 - m.cd / CFG.slime.moral.cd);
-    } else {
-      setSkill('skMoral', 'ready', '就绪', 1);
-    }
+    const Hc = CFG.slime.history;
+    if (S.history.mute > 0) setSkill('skHistory', 'active', '停手中', S.history.mute.toFixed(1) + 's', 1 - S.history.mute / Hc.mute);
+    else if (S.history.cd > 0) setSkill('skHistory', '', '冷却', S.history.cd.toFixed(1) + 's', 1 - S.history.cd / Hc.cd);
+    else setSkill('skHistory', 'ready', '就绪', '✓', 1);
 
-    // 史莱姆：历史的回眸
-    const hist = sState.history;
-    if (hist.mute > 0) {
-      setSkill('skHistory', 'active', '停手 ' + hist.mute.toFixed(1) + 's', 1 - hist.mute / CFG.slime.history.mute);
-    } else if (hist.cd > 0) {
-      setSkill('skHistory', '', hist.cd.toFixed(1) + 's', 1 - hist.cd / CFG.slime.history.cd);
-    } else {
-      setSkill('skHistory', 'ready', '就绪', 1);
-    }
-
-    if (detailOn) updateDetail();
+    if (drawerOn) updateDetail();
   }
 
-  // ---------- 详细模式 ----------
-  let detailOn = false;
+  function rowBar(k, ratio, val) {
+    return '<div class="row"><span class="k">' + k + '</span>'
+      + '<span class="bar2"><i style="width:' + Math.round(clamp(ratio, 0, 1) * 100) + '%"></i></span>'
+      + '<span class="v">' + val + '</span></div>';
+  }
 
-  function row(k, v) { return '<tr><td class="k">' + k + '</td><td class="v">' + v + '</td></tr>'; }
-
-  function statusTag(f) {
-    if (f.hp <= 0) return '<span class="tag t-lock">已倒下</span>';
-    if (f.invuln > 0) return '<span class="tag t-lock">锁血 ' + f.invuln.toFixed(1) + 's</span>';
-    if (f.sky > 0) return '<span class="tag t-on">浮空 ' + f.sky.toFixed(1) + 's</span>';
-    if (f.mute > 0) return '<span class="tag t-on">停手 ' + f.mute.toFixed(1) + 's</span>';
-    if (f.stun > 0) return '<span class="tag t-cd">眩晕 ' + f.stun.toFixed(1) + 's</span>';
+  function tagOf(f) {
+    if (f.hp <= 0) return '<span class="tag t-lock">倒下</span>';
+    if (f.invuln > 0) return '<span class="tag t-lock">锁血</span>';
+    if (f.sky > 0) return '<span class="tag t-on">浮空·免疫</span>';
+    if (f.frozen > 0) return '<span class="tag t-on">冰冻</span>';
+    if (f.stun > 0) return '<span class="tag t-cd">眩晕</span>';
     return '<span class="tag t-ok">正常</span>';
   }
 
   function updateDetail() {
-    const ra = rabbit, sl = slime;
-
+    const U = CFG.rabbit.ult;
     document.getElementById('detailA').innerHTML =
-      '<h3>兔子 · 详细</h3><table>'
-      + row('生命', fmt(ra.hp) + ' / ' + fmt(ra.maxHp) + '（' + (ra.hp / ra.maxHp * 100).toFixed(1) + '%）')
-      + row('基础攻击', fmt(ra.atk))
-      + row('锤击伤害', fmt(rabbitDamage()) + ' <span style="color:#4a6577;font-weight:500">= 70%×' + fmt(ra.atk) + ' + 1%×' + fmt(ra.hp) + '</span>')
-      + row('状态', statusTag(ra))
-      + row('累计输出', fmt(ra.dealt))
-      + row('累计承伤', fmt(ra.taken))
-      + row('命中次数', ra.hits)
-      + row('平均速度', Math.round(ra.sp) + ' px/s')
-      + row('当前坐标', Math.round(ra.x) + ', ' + Math.round(ra.y))
-      + row('巨锤周期', CFG.rabbit.hammer.period + 's（挥击 ' + CFG.rabbit.hammer.dur + 's）')
-      + row('冰岛冲击', raStateText())
-      + row('最近 10s 承伤', fmt(takenBetween(ra, 0, 10)))
-      + '</table>';
+      '<h3>兔子</h3>'
+      + rowBar('生命', rabbit.hp / rabbit.maxHp, fmt(rabbit.hp) + ' / ' + fmt(rabbit.maxHp))
+      + rowBar('锤击（本次）', rabbitDamage() / rabbit.maxHp, fmt(rabbitDamage()))
+      + '<div class="row"><span class="k">状态</span><span>' + tagOf(rabbit) + '</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">输出 / 承伤</span><span>' + fmt(rabbit.dealt) + ' / ' + fmt(rabbit.taken) + '</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">命中</span><span>' + rabbit.hits + ' 次</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">速度</span><span>' + Math.round(rabbit.sp) + ' px/s</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">坐标</span><span>' + Math.round(rabbit.x) + ', ' + Math.round(rabbit.y) + '</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">大招</span><span>' + (R.ultUsed ? (R.lockT > 0 ? '锁血 ' + R.lockT.toFixed(1) + 's' : '已释放') : '待触发 &lt; ' + Math.round(U.hpThreshold * 100) + '%') + '</span><span class="v"></span></div>'
+      + rowBar('最近 10s 承伤', takenBetween(rabbit, 0, 10) / rabbit.maxHp, fmt(takenBetween(rabbit, 0, 10)));
 
     document.getElementById('detailB').innerHTML =
-      '<h3>史莱姆 · 详细</h3><table>'
-      + row('生命', fmt(sl.hp) + ' / ' + fmt(sl.maxHp) + '（' + (sl.hp / sl.maxHp * 100).toFixed(1) + '%）')
-      + row('基础攻击', fmt(sl.atk))
-      + row('单球伤害', fmt(sl.atk * CFG.slime.spit.dmgRatio) + ' <span style="color:#4a6577;font-weight:500">= 60%×攻击</span>')
-      + row('状态', statusTag(sl))
-      + row('累计输出', fmt(sl.dealt))
-      + row('累计承伤', fmt(sl.taken))
-      + row('吸血回复', fmt(sl.healed) + ' <span style="color:#4a6577;font-weight:500">每次命中 3%(' + fmt(sl.maxHp * CFG.slime.lifesteal) + ')</span>')
-      + row('命中次数', sl.hits)
-      + row('场上球数', blobs.length)
-      + row('平均速度', Math.round(sl.sp) + ' px/s')
-      + row('当前坐标', Math.round(sl.x) + ', ' + Math.round(sl.y))
-      + row('道德制高点', sState.moral.air > 0 ? '浮空中 ' + sState.moral.air.toFixed(1) + 's' : (sState.moral.cd > 0 ? '冷却 ' + sState.moral.cd.toFixed(1) + 's' : '就绪'))
-      + row('历史的回眸', sState.history.mute > 0 ? '停手中 ' + sState.history.mute.toFixed(1) + 's' : (sState.history.cd > 0 ? '冷却 ' + sState.history.cd.toFixed(1) + 's' : '就绪'))
-      + row('上次回溯', sState.lastReflect ? fmt(sState.lastReflect) + ' 伤害 / 回血 ' + fmt(sState.lastHeal) : '—')
-      + row('最近 10s 承伤', fmt(takenBetween(sl, 0, 10)))
-      + row('前 10s 承伤', fmt(takenBetween(sl, 10, 20)))
-      + '</table>';
+      '<h3>史莱姆</h3>'
+      + rowBar('生命', slime.hp / slime.maxHp, fmt(slime.hp) + ' / ' + fmt(slime.maxHp))
+      + rowBar('单球伤害', CFG.slime.spit.dmgRatio, fmt(slime.maxHp * CFG.slime.spit.dmgRatio))
+      + '<div class="row"><span class="k">状态</span><span>' + tagOf(slime) + '</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">输出 / 承伤</span><span>' + fmt(slime.dealt) + ' / ' + fmt(slime.taken) + '</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">吸血回复</span><span>' + fmt(slime.healed) + '</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">场上球</span><span>' + blobs.length + ' 个</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">速度</span><span>' + Math.round(slime.sp) + ' px/s</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">坐标</span><span>' + Math.round(slime.x) + ', ' + Math.round(slime.y) + '</span><span class="v"></span></div>'
+      + rowBar('最近 10s 承伤', takenBetween(slime, 0, 10) / slime.maxHp, fmt(takenBetween(slime, 0, 10)))
+      + rowBar('前 10s 承伤', takenBetween(slime, 10, 20) / slime.maxHp, fmt(takenBetween(slime, 10, 20)))
+      + '<div class="row"><span class="k">上次回溯</span><span>' + (S.lastReflect ? fmt(S.lastReflect) + ' 伤害 / 回血 ' + fmt(S.lastHeal) : '—') + '</span><span class="v"></span></div>';
   }
 
-  function raStateText() {
-    if (!rState.ultUsed) return '待触发（<' + Math.round(CFG.rabbit.ult.hpThreshold * 100) + '% 生命）';
-    if (rState.lockT > 0) return '锁血中 ' + rState.lockT.toFixed(1) + 's';
-    return '已释放';
+  function buildParams() {
+    const lines = [];
+    const walk = (obj, path) => {
+      for (const k in obj) {
+        const v = obj[k];
+        if (v && typeof v === 'object' && !Array.isArray(v)) walk(v, path ? path + '.' + k : k);
+        else lines.push([path ? path + '.' + k : k, Array.isArray(v) ? v.join(' ~ ') : v]);
+      }
+    };
+    walk(CFG, '');
+    document.getElementById('paramsBody').innerHTML = lines
+      .map(pair => '<span class="c">' + pair[0] + '</span> = <span class="n">' + pair[1] + '</span>')
+      .join('\n');
   }
 
-  // ---------- 结算 ----------
-  function showVerdict(winnerKey) {
+  // ==========================================================================
+  //  ⑬  横幅 / 结算 / 交互
+  // ==========================================================================
+  let bannerT = 0;
+  function showBanner(text) {
+    const el = document.getElementById('banner');
+    if (!text) { el.classList.remove('show'); return; }
+    el.textContent = text;
+    el.classList.add('show');
+    bannerT = 1.1;
+  }
+
+  function showVerdict(who) {
     const el = document.getElementById('verdict');
-    const win = winnerKey === 'rabbit' ? '兔子' : '史莱姆';
-    el.innerHTML = '<div>' + win + ' 获胜</div><small>' + clock.toFixed(1) + ' 秒 · 点「重新开局」再来一局</small>';
+    el.innerHTML = '<div>' + (who === 'rabbit' ? '兔子' : '史莱姆') + ' 获胜</div>'
+      + '<small>' + clock.toFixed(1) + ' 秒 · 点「重新开局」再来一局</small>';
     el.classList.add('show');
   }
 
-  // ============================================================
-  // 主循环
-  // ============================================================
-  let last = performance.now();
-  let acc = 0;
+  let drawerOn = false, paramsOn = false;
+
+  document.getElementById('btnReset').addEventListener('click', () => { reset(); });
+
+  document.getElementById('btnDetail').addEventListener('click', function () {
+    drawerOn = !drawerOn;
+    paramsOn = false;
+    this.classList.toggle('on', drawerOn);
+    document.getElementById('btnParams').classList.remove('on');
+    document.getElementById('drawer').classList.toggle('show', drawerOn);
+    document.getElementById('params').classList.remove('show');
+    if (drawerOn) updateDetail();
+    resize();
+  });
+
+  document.getElementById('btnParams').addEventListener('click', function () {
+    paramsOn = !paramsOn;
+    drawerOn = false;
+    this.classList.toggle('on', paramsOn);
+    document.getElementById('btnDetail').classList.remove('on');
+    document.getElementById('params').classList.toggle('show', paramsOn);
+    document.getElementById('drawer').classList.remove('show');
+    resize();
+  });
+
+  const hint = document.getElementById('soundHint');
+  function unlockAudio() {
+    audioInit();
+    hint.classList.add('hide');
+    window.removeEventListener('pointerdown', unlockAudio);
+  }
+  window.addEventListener('pointerdown', unlockAudio);
+  window.addEventListener('resize', resize);
+
+  window.__sim = {
+    advance(sec) { for (let i = 0; i < sec * 60; i++) update(1 / 60); render(); updateUI(1); },
+    state() {
+      return {
+        clock, over,
+        hp: [Math.round(rabbit.hp), Math.round(slime.hp)],
+        dealt: [Math.round(rabbit.dealt), Math.round(slime.dealt)],
+        ult: R.ultUsed, iceT: +R.iceT.toFixed(2), freezeT: +R.freezeT.toFixed(2),
+        moral: { cd: +S.moral.cd.toFixed(1), air: +S.moral.air.toFixed(1) },
+        history: { cd: +S.history.cd.toFixed(1), mute: +S.history.mute.toFixed(1) },
+        blobs: blobs.length
+      };
+    }
+  };
+
+  // ==========================================================================
+  //  ⑭  启动
+  // ==========================================================================
+  buildHud();
+  buildParams();
+  seedSnow();
+  reset();
+  resize();
+
+  let last = performance.now(), acc = 0;
   const STEP = 1 / 60;
 
   function loop(now) {
@@ -1279,48 +1642,15 @@
     while (acc >= STEP && guard < 6) { update(STEP); acc -= STEP; guard++; }
     if (guard >= 6) acc = 0;
 
+    if (bannerT > 0) {
+      bannerT -= dt;
+      if (bannerT <= 0) document.getElementById('banner').classList.remove('show');
+    }
+
     render();
     updateUI(dt);
     requestAnimationFrame(loop);
   }
-
-  // ============================================================
-  // 交互
-  // ============================================================
-  document.getElementById('btnReset').addEventListener('click', () => {
-    reset();
-    last = performance.now();
-    acc = 0;
-  });
-
-  document.getElementById('btnDetail').addEventListener('click', (e) => {
-    detailOn = !detailOn;
-    e.currentTarget.classList.toggle('on', detailOn);
-    document.getElementById('detail').classList.toggle('show', detailOn);
-    document.body.classList.toggle('detail-open', detailOn);
-    if (detailOn) updateDetail();
-    resize();
-  });
-
-  // 调试用：快进 N 秒（正常使用不需要）
-  window.__sim = {
-    advance(sec) { for (let i = 0; i < sec * 60; i++) update(STEP); render(); updateUI(1); },
-    state() {
-      return {
-        clock, over,
-        hp: [rabbit.hp, slime.hp],
-        dealt: [rabbit.dealt, slime.dealt],
-        torn: [rabbit.taken, slime.taken],
-        blobs: blobs.length,
-        moral: sState.moral, history: sState.history, ult: rState.ultUsed,
-        hammerReady: hammer.ready, hammerOn: rState.on, ang: +rState.ang.toFixed(2), pos: [Math.round(rabbit.x), Math.round(rabbit.y)]
-      };
-    }
-  };
-
-  buildPanels();
-  reset();
-  resize();
   requestAnimationFrame(loop);
 })();
 </script>

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""无头浏览器跑 duel-live.html：多局统计 + 截图。"""
+"""无头浏览器跑 duel-live.html：多局统计 + 关键画面截图。"""
 import base64
 import json
 import os
@@ -14,9 +14,9 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 HTML = os.path.join(BASE, 'duel-live.html')
 OUT = os.path.join(BASE, 'shots')
 os.makedirs(OUT, exist_ok=True)
-ROUNDS = int(sys.argv[1]) if len(sys.argv) > 1 else 8
+ROUNDS = int(sys.argv[1]) if len(sys.argv) > 1 else 6
 
-port = 9422
+port = 9431
 p = R.start_chrome(os.path.join(BASE, '_live_prof'), 1500, 1000, port)
 try:
     drv = R.CDP(R.page_ws(port))
@@ -25,7 +25,7 @@ try:
     drv.send('Page.navigate', {'url': 'file:///' + HTML.replace('\\', '/')})
 
     ok = False
-    for _ in range(60):
+    for _ in range(70):
         time.sleep(0.2)
         try:
             if drv.eval('!!(window.__sim)'):
@@ -37,7 +37,7 @@ try:
         raise SystemExit('页面没起来（可能有 JS 报错）')
 
     wins = {'rabbit': 0, 'slime': 0}
-    durs, ultUsed, moralUsed, histUsed = [], 0, 0, 0
+    durs, ult, counter = [], 0, 0
 
     for i in range(ROUNDS):
         drv.eval("document.getElementById('btnReset').click()")
@@ -53,29 +53,46 @@ try:
         wins[st['over']] += 1
         durs.append(round(st['clock'], 1))
         if st['ult']:
-            ultUsed += 1
-        print('第 %d 局：%s 胜  %.1fs  终局血量 兔子 %s / 史莱姆 %s'
+            ult += 1
+        print('第 %d 局：%s 胜  %.1fs  兔子 %s / 史莱姆 %s'
               % (i + 1, '兔子' if st['over'] == 'rabbit' else '史莱姆',
                  st['clock'], round(st['hp'][0]), round(st['hp'][1])), flush=True)
 
-    print('\n兔子 %d : %d 史莱姆   平均 %.1fs   冰岛冲击触发 %d/%d 局'
+    print('\n兔子 %d : %d 史莱姆   平均 %.1fs   大招触发 %d/%d'
           % (wins['rabbit'], wins['slime'],
-             sum(durs) / len(durs) if durs else 0, ultUsed, ROUNDS))
+             sum(durs) / len(durs) if durs else 0, ult, ROUNDS))
 
-    # 截图：重置后跑到 6s 和 16s，再展开详细模式
-    for t in (6, 16):
-        drv.eval("document.getElementById('btnReset').click()")
-        drv.eval('__sim.advance(%d)' % t)
-        time.sleep(0.25)
-        shot = drv.send('Page.captureScreenshot', {'format': 'png'})
-        with open(os.path.join(OUT, 'g%02d.png' % t), 'wb') as f:
-            f.write(base64.b64decode(shot['data']))
+    def shot(name):
+        s = drv.send('Page.captureScreenshot', {'format': 'png'})
+        with open(os.path.join(OUT, name + '.png'), 'wb') as f:
+            f.write(base64.b64decode(s['data']))
 
+    # 1) 普通对局画面
+    drv.eval("document.getElementById('btnReset').click()")
+    drv.eval('__sim.advance(7)')
+    shot('normal')
+
+    # 2) 等到大招触发（冰岛背景）
+    drv.eval("document.getElementById('btnReset').click()")
+    for _ in range(200):
+        drv.eval('__sim.advance(0.5)')
+        st = json.loads(drv.eval('JSON.stringify(__sim.state())'))
+        if st['ult']:
+            break
+    drv.eval('__sim.advance(0.8)')
+    st = json.loads(drv.eval('JSON.stringify(__sim.state())'))
+    print('大招瞬间:', st)
+    shot('ice')
+
+    # 3) 道德制高点浮空
+    drv.eval('__sim.advance(2.0)')
+    shot('ice2')
+
+    # 4) 详细面板
     drv.eval("document.getElementById('btnDetail').click()")
-    time.sleep(0.4)
-    shot = drv.send('Page.captureScreenshot', {'format': 'png'})
-    with open(os.path.join(OUT, 'detail.png'), 'wb') as f:
-        f.write(base64.b64decode(shot['data']))
+    time.sleep(0.3)
+    shot('detail')
+
     print('截图 ->', OUT)
 finally:
     p.terminate()
