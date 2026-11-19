@@ -6,12 +6,43 @@
 <title>兔子 vs 史莱姆 · 实时演算</title>
 <!--
   ============================================================================
-  兔子 vs 史莱姆 · 实时演算 v2
+  兔子 vs 史莱姆 · 实时演算 v2.3
   ----------------------------------------------------------------------------
-  · 单文件，双击即可运行；所有图片以 base64 内联
-  · 所有可调数值集中在 <script> 开头的 CFG 对象里，带中文注释
-  · 页面下方「参数」按钮可展开查看当前生效的全部数值
-  · 调试：控制台 __sim.advance(秒) / __sim.state()
+  单文件，双击即可运行；所有图片以 base64 内联。
+
+  【怎么改数值】
+  打开本文件，搜索 "const CFG"（在 <script> 开头的第 ① 区），
+  所有可调参数都在那个对象里，每项后面都有中文注释。改完保存、刷新页面即可，
+  不需要重新构建。（如果你有 live.template.html，改完要跑 python _build_live.py 重新内联图片。）
+
+  常用参数索引（都在 CFG 里）：
+    arena.w / arena.h           战场尺寸（默认 1080 × 740）
+    rabbit.maxHp / rabbit.atk   兔子基础生命 / 攻击力（10000 / 3000）
+    rabbit.dmgAtkRatio          锤击 = 该值 × 攻击力（默认 0.70）
+    rabbit.dmgHpRatio           锤击额外加 = 该值 × 兔子当前生命（默认 0.01）
+    rabbit.hammer.period        几秒抡一次（3.4）
+    rabbit.ult.hpThreshold      低于多少血触发大招（0.20）
+    rabbit.ult.lockDur          锁血时长（2 秒）
+    rabbit.ult.freeze           冰冻时长（3 秒）
+    rabbit.ult.iceDur           冰岛背景持续（3.4 秒）
+    rabbit.ult.dmgRatio         大招伤害 = 该值 × 对方最大生命（0.30）
+    slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力
+    slime.spit.period           几秒喷一组（4.7）
+    slime.spit.dmgRatio         单球伤害 = 该值 × 对方最大生命（0.21）
+    slime.spit.speed            球速（430），越大越准
+    slime.lifesteal             命中吸血比例（0.03）
+    slime.moral.cd / air        道德制高点 冷却 / 浮空时长（30 / 5）
+    slime.moral.counterChance   大招对轴成功概率（0.45）
+    slime.moral.holdMax         技能就绪后最多留多久（20 秒）
+    slime.history.cd / mute     历史的回眸 冷却 / 停手（15 / 10）
+    slime.history.needRatio     最近 10s 承伤超过多少才值得放（0.12）
+
+  【语音播报】
+  用浏览器自带 TTS（speechSynthesis），播报技能释放、对轴、K.O. 和 MVP。
+  页面上的「语音播报」按钮可以随时开关；浏览器没有中文语音包时不会出声。
+
+  【调试】
+  控制台 __sim.advance(秒) 快进，__sim.state() 看状态。
   ============================================================================
 -->
 <style>
@@ -67,11 +98,15 @@
   }
   canvas{display:block;width:100%;height:100%}
 
-  .hud{display:flex;flex-direction:column;gap:10px}
+  /* 侧栏高度 = 作战区高度（--stage-h 由 JS 写入） */
+  .hud{
+    width:270px;flex:none;display:flex;flex-direction:column;
+    height:var(--stage-h,720px);
+  }
   .card{
     background:#eaf6fd;border:3px solid var(--ink);border-radius:12px;
     box-shadow:0 4px 0 var(--ink);
-    overflow:hidden;
+    height:100%;display:flex;flex-direction:column;overflow:hidden;
   }
   .card-top{display:flex;align-items:center;gap:8px;padding:8px 10px 6px}
   .avatar{
@@ -90,7 +125,10 @@
   }
   .stat{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);padding:5px 14px 0;font-variant-numeric:tabular-nums}
 
-  .skills{padding:8px 8px 9px;display:flex;flex-direction:column;gap:7px}
+    .skills{padding:8px 8px 9px;display:flex;flex-direction:column;gap:9px;flex:1;justify-content:center}
+  /* 展开详情时：技能卡贴顶，详情占满剩余高度并可滚动 */
+  .card.detail-on .skills{flex:0 0 auto;justify-content:flex-start}
+  .card.detail-on .detail{display:block;flex:1 1 auto;min-height:0;max-height:none}
   .sk{
     display:grid;grid-template-columns:42px 1fr;gap:9px;align-items:center;
     border:2px solid rgba(10,42,63,.16);border-radius:9px;padding:6px;background:#f7fcff;
@@ -112,6 +150,16 @@
   .sk.ready .sk-bar i{background:#35b45f}
   .sk.active .sk-bar i{background:var(--violet)}
   .sk.lock .sk-bar i{background:var(--blood)}
+
+  /* 卡片内的详细数值 */
+  .detail{display:none;padding:8px 9px 10px;overflow:auto;flex:0 1 auto;border-top:2px dashed rgba(10,42,63,.14)}
+  .detail.show{display:block}
+  .detail h3{margin:2px 0 6px;font-size:12px;color:var(--ink-soft);letter-spacing:.06em}
+  .detail .row{grid-template-columns:72px 1fr auto;gap:6px;font-size:11px;padding:2.5px 0}
+  .detail .row .k{font-size:11px}
+  .detail .row .bar2{height:8px;min-width:44px}
+  .detail .row .v{font-size:11.5px}
+  .detail .tag{font-size:10.5px;padding:1px 6px}
 
   .toolbar{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
   button{
@@ -157,6 +205,23 @@
   .params pre{margin:0;padding:12px 16px 20px;line-height:1.7;font-family:ui-monospace,Consolas,monospace;white-space:pre-wrap}
   .params .c{color:#6f9ab0}
   .params .n{color:#ffd166}
+
+  /* 全屏冰岛背景（冰岛冲击时铺满整页） */
+  .ice-bg{
+    position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background-size:cover;background-position:center;
+    opacity:0;transition:opacity .5s ease;
+  }
+  .ice-bg.on{opacity:1}
+  .ice-bg::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg, rgba(6,24,38,.72), rgba(6,24,38,.55));
+  }
+  body.ice-mode{
+    background:#08202f;
+    transition:background .5s ease;
+  }
+  body.ice-mode .title{color:#fff;text-shadow:0 3px 0 rgba(0,0,0,.45), 0 0 30px rgba(143,216,255,.6)}
 
   .sound-hint{
     position:absolute;left:50%;bottom:12px;transform:translateX(-50%);
@@ -231,6 +296,7 @@
 </style>
 </head>
 <body>
+<div class="ice-bg" id="iceBg"></div>
 <div class="app">
   <h1 class="title">兔子 <em>vs</em> 史莱姆</h1>
 
@@ -254,20 +320,12 @@
 
   <div class="toolbar">
     <button id="btnDetail">详细数值</button>
-    <button id="btnParams">参数</button>
+    <button id="btnVoice">语音播报：开</button>
     <button id="btnReset">重新开局</button>
   </div>
 </div>
 
-<section class="drawer" id="drawer">
-  <h2>详细数值</h2>
-  <div class="cols">
-    <div class="col" id="detailA"></div>
-    <div class="col" id="detailB"></div>
-  </div>
-</section>
 
-<section class="params" id="params"><h2>当前生效参数（改源码顶部 CFG 即可）</h2><pre id="paramsBody"></pre></section>
 
 <script>
 (function () {
@@ -398,12 +456,13 @@
 
   function resize() {
     const availW = wrap.clientWidth || 640;
-    const reserve = drawerOn ? Math.min(window.innerHeight * 0.46, 430)
-                  : paramsOn ? Math.min(window.innerHeight * 0.58, 470) : 0;
-    const availH = Math.max(240, window.innerHeight - 150 - reserve);
+    const availH = Math.max(240, window.innerHeight - 150);
     const w = Math.min(availW, availH * (W / H));
+    const h = Math.floor(w * H / W);
     stage.style.width = Math.floor(w) + 'px';
-    stage.style.height = Math.floor(w * H / W) + 'px';
+    stage.style.height = h + 'px';
+    // 侧栏高度跟作战区对齐
+    document.documentElement.style.setProperty('--stage-h', h + 'px');
 
     const r = stage.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -717,6 +776,7 @@
       sfxKO();
       shake(3.2);
       showKO();
+      say((target === rabbit ? '兔子' : '史莱姆') + '被击倒，K O！', true);
     }
     return real;
   }
@@ -756,6 +816,7 @@
     sfxIce();
     sfxFreeze();
     showBanner('冰岛冲击');
+    say('冰岛冲击！', true);
     shake(1.8);
 
     rabbit.face = slime.x > rabbit.x ? 1 : -1;
@@ -767,6 +828,7 @@
         at: clock + 0.7, gen,
         fn: () => {
           showBanner('对轴成功 · 完全免疫');
+          say('对轴成功，完全免疫！');
           addNum(slime.x, slime.y - slime.hh - 76, '对轴！', '#ffe6a6', 26);
           for (let i = 0; i < 3; i++) {
             fx.rings.push({ x: slime.x, y: slime.y, t: i * 0.1, dur: 0.8, r0: 10, r1: 150, color: '#c9a6ff', w: 3 });
@@ -937,6 +999,7 @@
 
     sfxMoral();
     showBanner('站在道德制高点');
+    say('史莱姆，站在道德制高点');
     addNum(slime.x, slime.y - slime.hh - 60, '道德制高点', '#c9a6ff', 22);
     for (let i = 0; i < 4; i++) {
       fx.rings.push({ x: slime.x, y: slime.y, t: i * 0.08, dur: 0.7, r0: 10, r1: 120 + i * 26, color: '#c9a6ff', w: 3.4 });
@@ -964,6 +1027,7 @@
 
     sfxHistory();
     showBanner('历史的回眸');
+    say('史莱姆，历史的回眸', true);
     addNum(slime.x, slime.y - slime.hh - 60, '历史的回眸', '#c9a6ff', 22);
 
     for (let i = 0; i < 5; i++) {
@@ -1522,7 +1586,9 @@
       + '<div class="skills">'
       + skillCard('skHammer', ICON.hammer, '巨锤环绕')
       + skillCard('skUlt', ICON.ice, '冰岛冲击')
-      + '</div></div>';
+      + '</div>'
+      + '<div class="detail" id="detailA"></div>'
+      + '</div>';
 
     document.getElementById('hudB').innerHTML =
       '<div class="card">'
@@ -1533,7 +1599,9 @@
       + '<div class="skills">'
       + skillCard('skMoral', ICON.moral, '站在道德制高点')
       + skillCard('skHistory', ICON.history, '历史的回眸')
-      + '</div></div>';
+      + '</div>'
+      + '<div class="detail" id="detailB"></div>'
+      + '</div>';
   }
 
   function setSkill(id, cls, state, remain, ratio) {
@@ -1591,7 +1659,7 @@
     else if (S.history.readyFor > 0.4) setSkill('skHistory', 'ready', '留招', S.history.readyFor.toFixed(0) + 's', 1 - S.history.readyFor / Hc.holdMax);
     else setSkill('skHistory', 'ready', '就绪', '✓', 1);
 
-    if (drawerOn) updateDetail();
+    if (detailOn) updateDetail();
   }
 
   function rowBar(k, ratio, val) {
@@ -1638,20 +1706,6 @@
       + '<div class="row"><span class="k">上次回溯</span><span>' + (S.lastReflect ? fmt(S.lastReflect) + ' 伤害 / 回血 ' + fmt(S.lastHeal) : '—') + '</span><span class="v"></span></div>';
   }
 
-  function buildParams() {
-    const lines = [];
-    const walk = (obj, path) => {
-      for (const k in obj) {
-        const v = obj[k];
-        if (v && typeof v === 'object' && !Array.isArray(v)) walk(v, path ? path + '.' + k : k);
-        else lines.push([path ? path + '.' + k : k, Array.isArray(v) ? v.join(' ~ ') : v]);
-      }
-    };
-    walk(CFG, '');
-    document.getElementById('paramsBody').innerHTML = lines
-      .map(pair => '<span class="c">' + pair[0] + '</span> = <span class="n">' + pair[1] + '</span>')
-      .join('\n');
-  }
 
   // ==========================================================================
   //  ⑬  横幅 / 结算 / 交互
@@ -1715,12 +1769,13 @@
     document.getElementById('koText').classList.remove('show');
     card.classList.add('show');
     sfxWin();
+    say('本局 M V P，' + name + '，剩余生命百分之' + rate);
 
     const again = document.getElementById('btnAgain');
     if (again) again.addEventListener('click', function (e) { e.stopPropagation(); reset(); });
   }
 
-  let drawerOn = false, paramsOn = false;
+  let detailOn = false;
 
   document.getElementById('btnReset').addEventListener('click', () => { reset(); });
 
@@ -1730,24 +1785,19 @@
   });
 
   document.getElementById('btnDetail').addEventListener('click', function () {
-    drawerOn = !drawerOn;
-    paramsOn = false;
-    this.classList.toggle('on', drawerOn);
-    document.getElementById('btnParams').classList.remove('on');
-    document.getElementById('drawer').classList.toggle('show', drawerOn);
-    document.getElementById('params').classList.remove('show');
-    if (drawerOn) updateDetail();
-    resize();
+    detailOn = !detailOn;
+    this.classList.toggle('on', detailOn);
+    document.getElementById('detailA').classList.toggle('show', detailOn);
+    document.getElementById('detailB').classList.toggle('show', detailOn);
+    document.querySelectorAll('.card').forEach(function (c) { c.classList.toggle('detail-on', detailOn); });
+    if (detailOn) updateDetail();
   });
 
-  document.getElementById('btnParams').addEventListener('click', function () {
-    paramsOn = !paramsOn;
-    drawerOn = false;
-    this.classList.toggle('on', paramsOn);
-    document.getElementById('btnDetail').classList.remove('on');
-    document.getElementById('params').classList.toggle('show', paramsOn);
-    document.getElementById('drawer').classList.remove('show');
-    resize();
+  document.getElementById('btnVoice').addEventListener('click', function () {
+    TTS.on = !TTS.on;
+    this.textContent = '语音播报：' + (TTS.on ? '开' : '关');
+    this.classList.toggle('on', !TTS.on);
+    if (!TTS.on && window.speechSynthesis) window.speechSynthesis.cancel();
   });
 
   const hint = document.getElementById('soundHint');
@@ -1775,10 +1825,59 @@
   };
 
   // ==========================================================================
+  //  ⑬.5  全屏冰岛背景 + 语音播报
+  // ==========================================================================
+  let iceDomOn = false;
+
+  function initIceBg() {
+    document.getElementById('iceBg').style.backgroundImage = 'url("' + IMG_SRC.ice + '")';
+  }
+
+  // 冰岛冲击时，整个页面（含作战区外）都切成冰岛照片
+  function syncIceDom() {
+    const on = R.iceT > 0;
+    if (on === iceDomOn) return;
+    iceDomOn = on;
+    document.getElementById('iceBg').classList.toggle('on', on);
+    document.body.classList.toggle('ice-mode', on);
+  }
+
+  // ---- 语音播报（浏览器自带 TTS） ----
+  const TTS = { on: true, voice: null };
+
+  function initTTS() {
+    if (!window.speechSynthesis) { TTS.on = false; return; }
+    const pick = () => {
+      const vs = window.speechSynthesis.getVoices() || [];
+      TTS.voice =
+        vs.find(v => /zh[-_]CN/i.test(v.lang) && /Xiaoxiao|Huihui|Yaoyao|Kangkang|female|女/i.test(v.name)) ||
+        vs.find(v => /zh[-_]CN/i.test(v.lang)) ||
+        vs.find(v => /zh/i.test(v.lang)) || null;
+    };
+    pick();
+    window.speechSynthesis.onvoiceschanged = pick;
+  }
+
+  // force = true 时打断当前播报（用于大招 / 阵亡这种关键节点）
+  function say(text, force) {
+    if (!TTS.on || !window.speechSynthesis) return;
+    if (force) window.speechSynthesis.cancel();
+    else if (window.speechSynthesis.speaking) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN';
+    u.rate = 1.08;
+    u.pitch = 1.0;
+    u.volume = 1.0;
+    if (TTS.voice) u.voice = TTS.voice;
+    window.speechSynthesis.speak(u);
+  }
+
+  // ==========================================================================
   //  ⑭  启动
   // ==========================================================================
   buildHud();
-  buildParams();
+  initIceBg();
+  initTTS();
   seedSnow();
   reset();
   resize();
@@ -1800,6 +1899,7 @@
     }
 
     render();
+    syncIceDom();
     updateUI(dt);
     requestAnimationFrame(loop);
   }
