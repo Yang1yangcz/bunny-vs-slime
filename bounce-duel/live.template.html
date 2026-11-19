@@ -386,7 +386,7 @@
 
   <div class="dock right">
     <button id="btnSfx">音效：开</button>
-    <button id="btnVoice">语音：开</button>
+    <button id="btnVoice" class="on">语音：关</button>
     <button id="btnReset">重新开局</button>
   </div>
 </div>
@@ -2016,7 +2016,7 @@
   }
 
   // ---- 语音播报（浏览器自带 TTS） ----
-  const TTS = { on: true, voice: null };
+  const TTS = { on: false, voice: null };   // 默认关闭语音播报，需要时点右下角打开
 
   function initTTS() {
     if (!window.speechSynthesis) { TTS.on = false; return; }
