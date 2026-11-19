@@ -18,19 +18,21 @@
   常用参数索引（都在 CFG 里）：
     arena.w / arena.h           战场尺寸（默认 1080 × 740）
     rabbit.maxHp / rabbit.atk   兔子基础生命 / 攻击力（10000 / 3000）
-    rabbit.dmgAtkRatio          锤击 = 该值 × 攻击力（默认 0.70）
-    rabbit.dmgHpRatio           锤击额外加 = 该值 × 兔子当前生命（默认 0.01）
+    rabbit.dmgAtkRatio          锤击 = 该值 × 基础攻击（0.70 → 2100 ≈ 21% 生命）
+                                ※ 全部伤害都是「基础攻击 × 百分比」，只有 atk 是数值
     rabbit.hammer.period        几秒抡一次（3.4）
     rabbit.ult.hpThreshold      低于多少血触发大招（0.20）
     rabbit.ult.lockDur          锁血时长（2 秒）
     rabbit.ult.freeze           冰冻时长（3 秒）
     rabbit.ult.iceDur           冰岛背景持续（3.4 秒）
-    rabbit.ult.dmgRatio         大招伤害 = 该值 × 对方最大生命（0.30）
-    slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力
-    slime.spit.period           几秒喷一组（4.7）
-    slime.spit.dmgRatio         单球伤害 = 该值 × 对方最大生命（0.21）
+    rabbit.ult.uses             全局可释放次数（3）
+    rabbit.ult.dmgAtkRatio      大招伤害 = 该值 × 基础攻击（1.00 → 3000 ≈ 30% 生命）
+    rabbit.ult.healRatio        释放瞬间回血 = 该值 × 此前累计造成的伤害（0.30）
+    slime.maxHp / slime.atk     史莱姆基础生命 / 攻击力（12500 / 3000，比兔子高 25% 用来吃 3 次大招）
+    slime.spit.period           几秒喷一组（2.6）
+    slime.spit.dmgAtkRatio      单球伤害 = 该值 × 基础攻击（0.85 → 2550 ≈ 25.5% 生命）
     slime.spit.speed            球速（430），越大越准
-    slime.lifesteal             命中吸血比例（0.03）
+    slime.lifestealAtk          命中吸血 = 该值 × 基础攻击（0.10 → 300）
     slime.moral.cd / air        道德制高点 冷却 / 浮空时长（30 / 5）
     slime.moral.counterChance   大招对轴成功概率（0.45）
     slime.moral.holdMax         技能就绪后最多留多久（20 秒）
@@ -43,6 +45,7 @@
 
   【调试】
   控制台 __sim.advance(秒) 快进，__sim.state() 看状态。
+  控制台 __CFG.slime.spit.period = 3 可实时改参数；点「重新开局」后新数值生效。
   ============================================================================
 -->
 <style>
@@ -245,9 +248,13 @@
   .sound-hint.hide{opacity:0}
 
   .banner{
-    position:absolute;left:0;right:0;top:13%;text-align:center;pointer-events:none;
-    font-size:clamp(20px,3vw,34px);font-weight:900;color:#fff;letter-spacing:.08em;
-    text-shadow:0 3px 0 rgba(10,42,63,.6), 0 0 24px rgba(143,216,255,.9);
+    position:absolute;left:50%;top:8%;transform:translateX(-50%);
+    pointer-events:none;white-space:nowrap;
+    padding:5px 20px 7px;border-radius:12px;
+    background:rgba(6,30,46,.62);border:2px solid rgba(143,216,255,.5);
+    box-shadow:0 4px 0 rgba(4,18,28,.55);
+    font-size:clamp(18px,2.4vw,28px);font-weight:900;color:#fff;letter-spacing:.06em;
+    text-shadow:0 2px 0 rgba(10,42,63,.8), 0 0 20px rgba(143,216,255,.75);
     opacity:0;transition:opacity .18s ease;
   }
   .banner.show{opacity:1}
@@ -376,32 +383,37 @@
         dashGap: 250         // 距离超过这个值就先冲刺贴身
       },
 
-      // 锤击伤害 = 70% × 攻击力 + 1% × 兔子当前生命
-      // 满血约 2100 + 100 = 2200 ≈ 对方 22% 生命
+      // ---- 伤害模型：一律「基础攻击力 × 百分比」 ----
+      // 全场只有 atk（基础攻击力）是绝对数值，其余攻击参数都是百分比。
+      // 3000 攻击 ÷ 10000 生命 → 系数 × 0.30 = 对方基础生命的百分之几。
+      // 锤击 0.70 × 3000 = 2100 ≈ 对方 21% 生命
       dmgAtkRatio: 0.70,
-      dmgHpRatio: 0.01,
 
-      // ---- 破釜沉舟：生命 < 20% 触发 ----
+      // ---- 破釜沉舟：生命 < 20% 触发，全局只有 3 次 ----
       ult: {
-        hpThreshold: 0.20,   // 触发线
+        uses: 3,             // 全局释放上限（用完就不再锁血）
+        hpThreshold: 0.20,   // 触发线：每掉到这个线就触发一次
         lockDur: 2.0,        // 锁血 2 秒（期间不掉血）
         freeze: 3.0,         // 冰冻 3 秒（双方面对面对峙，停止运动）
         iceDur: 3.4,         // 冰岛背景持续时间，结束后关闭
-        dmgRatio: 0.30,      // 冰岛冲击伤害 = 30% × 对方最大生命
+        dmgAtkRatio: 1.00,   // 冰岛冲击伤害 = 1.00 × 基础攻击 = 3000 ≈ 对方 30% 生命
+        healRatio: 0.30,     // 释放瞬间回血 = 30% × 此前累计造成的伤害
         stun: 1.2
       }
     },
 
     // ---- 史莱姆 ----
     slime: {
-      maxHp: 10000,
+      // 基础生命比兔子高 25%：兔子多出 3 次冰岛冲击（共 3×3000）和 3 次锁血，
+      // 史莱姆只能靠血量和吸血硬吃，这一项是平衡的核心旋钮（10000 → 兔子碾压）
+      maxHp: 12500,
       atk: 3000,
       speed: [180, 320],
 
       spit: {
-        period: 4.7,         // 每 4.7s 喷一组
+        period: 2.6,         // 每 2.6s 喷一组（兔子有大招后要这个频率才打得动）
         chain: 0.34,         // 两连喷的间隔
-        dmgRatio: 0.21,      // 单球伤害 = 21% × 对方最大生命 = 2100
+        dmgAtkRatio: 0.85,   // 单球伤害 = 0.85 × 基础攻击 = 2550 ≈ 对方 25.5% 生命
         speed: 430,
         r: 33, miniR: 23,
         life: 14,
@@ -409,7 +421,7 @@
         maxBlobs: 8
       },
 
-      lifesteal: 0.03,       // 命中回自身最大生命 3%
+      lifestealAtk: 0.10,    // 命中吸血 = 0.10 × 基础攻击 = 300
 
       // ---- 技能一：站在道德制高点 ----
       moral: {
@@ -444,6 +456,9 @@
       numLife: 1.0           // 飘字存活时间
     }
   };
+
+  // 调试用：控制台可直接改参数，例如 __CFG.slime.spit.period = 3.2（改完立即生效）
+  window.__CFG = CFG;
 
   // ==========================================================================
   //  ②  基础工具
@@ -570,6 +585,17 @@
     for (let i = 0; i < 7; i++) tone('triangle', 2400 + Math.random() * 2200, 1400, t + 0.03 * i, 0.12, 0.06);
   }
 
+  // 冰岛回血：三音上行 + 细碎的高频气声
+  function sfxIceHeal() {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    [659.25, 880, 1174.66].forEach((f, i) => {
+      tone('sine', f, f * 1.01, t + 0.10 + i * 0.10, 0.45, 0.10);
+      tone('triangle', f * 2, f * 2, t + 0.10 + i * 0.10, 0.30, 0.03);
+    });
+    burst(t + 0.10, 0.5, 'highpass', 5200, 9000, 0.7, 0.05);
+  }
+
   function sfxMoral() {
     if (!SFX.ctx) return;
     const t = SFX.ctx.currentTime;
@@ -656,7 +682,7 @@
 
   const R = {
     on: false, t: 0, idle: 1.0, ang: -Math.PI / 2, hitDone: false, tail: 0,
-    ultUsed: false, lockT: 0, iceT: 0, freezeT: 0
+    ultLeft: CFG.rabbit.ult.uses, ultCount: 0, lockT: 0, iceT: 0, freezeT: 0
   };
   const S = {
     idle: 2.0, chain: 0, chainT: 0,
@@ -705,13 +731,16 @@
     fx.nums.length = 0; fx.rings.length = 0; fx.sparks.length = 0; fx.shards.length = 0;
 
     for (const f of fighters) {
+      // 每次重开都重新读一次 CFG，改完参数点「重新开局」即可生效
+      f.maxHp = f.cfg.maxHp; f.atk = f.cfg.atk;
       f.hp = f.maxHp; f.stun = 0; f.flash = 0; f.shake = 0; f.squash = 0; f.frozen = 0;
       f.dealt = 0; f.taken = 0; f.healed = 0; f.hits = 0; f.dmgLog = [];
       f.sky = 0; f.invuln = 0;
       spawn(f);
     }
     R.on = false; R.t = 0; R.idle = 1.0; R.ang = -Math.PI / 2; R.hitDone = false; R.tail = 0;
-    R.ultUsed = false; R.lockT = 0; R.iceT = 0; R.freezeT = 0;
+    R.ultLeft = CFG.rabbit.ult.uses; R.ultCount = 0;
+    R.lockT = 0; R.iceT = 0; R.freezeT = 0;
 
     S.idle = 2.0; S.chain = 0; S.chainT = 0;
     S.moral.cd = CFG.slime.moral.startCd; S.moral.air = 0; S.moral.readyFor = 0;
@@ -766,10 +795,11 @@
       return 0;
     }
 
-    // 兔子大招：任何一下都只能打到 20% 线
-    if (target === rabbit && !R.ultUsed) {
+    // 兔子大招：还有次数时，任何伤害都停在 20% 线上（等本帧 castIce 触发）
+    if (target === rabbit && R.ultLeft > 0) {
       const floor = target.maxHp * CFG.rabbit.ult.hpThreshold;
-      if (target.hp > floor && target.hp - amount < floor) amount = target.hp - floor;
+      // 已经压在线上了就完全免伤，否则同一帧的第二下会直接打穿这条线
+      amount = target.hp > floor ? Math.min(amount, target.hp - floor) : 0;
     }
 
     const before = target.hp;
@@ -816,8 +846,13 @@
     return { x: rabbit.x + Math.cos(R.ang) * r, y: rabbit.y + Math.sin(R.ang) * r };
   }
 
+  // 统一伤害公式：基础攻击力 × 百分比（全场只有 atk 是绝对数值）
+  function atkDmg(who, ratio) {
+    return Math.max(0, Math.round(who.atk * ratio));
+  }
+
   function rabbitDamage() {
-    return Math.round(rabbit.atk * CFG.rabbit.dmgAtkRatio + rabbit.hp * CFG.rabbit.dmgHpRatio);
+    return atkDmg(rabbit, CFG.rabbit.dmgAtkRatio);
   }
 
   function castIce() {
@@ -825,7 +860,8 @@
     const canCounter = S.moral.cd <= 0 && S.moral.air <= 0;
     const countered = canCounter && Math.random() < CFG.slime.moral.counterChance;
 
-    R.ultUsed = true;
+    R.ultLeft = Math.max(0, R.ultLeft - 1);
+    R.ultCount += 1;
     R.lockT = U.lockDur;
     rabbit.invuln = U.lockDur;
     R.iceT = U.iceDur;
@@ -833,9 +869,25 @@
 
     sfxIce();
     sfxFreeze();
-    showBanner('冰岛冲击');
-    say('冰岛冲击！', true);
     shake(1.8);
+
+    // 释放瞬间回血：此前累计造成伤害的 30%
+    const healAmt = Math.round(rabbit.dealt * U.healRatio);
+    const healed = heal(rabbit, healAmt, '#7bd88f');
+    if (healed > 0) {
+      for (let i = 0; i < 3; i++) {
+        fx.rings.push({
+          x: rabbit.x, y: rabbit.y, t: i * 0.1, dur: 0.85,
+          r0: 24, r1: 132 + i * 22, color: '#7bd88f', w: 3.2
+        });
+      }
+      sfxIceHeal();
+      showBanner('冰岛冲击 · 回血 ' + fmt(healed));
+      say('冰岛冲击！回复 ' + fmt(healed), true);
+    } else {
+      showBanner('冰岛冲击');
+      say('冰岛冲击！', true);
+    }
 
     rabbit.face = slime.x > rabbit.x ? 1 : -1;
     slime.face = rabbit.x > slime.x ? 1 : -1;
@@ -857,7 +909,7 @@
       pending.push({
         at: clock + 0.55, gen,
         fn: () => {
-          damage(slime, Math.round(slime.maxHp * U.dmgRatio), { source: rabbit, color: '#8fd8ff' });
+          damage(slime, atkDmg(rabbit, U.dmgAtkRatio), { source: rabbit, color: '#8fd8ff' });
           if (slime.hp > 0) slime.stun = Math.max(slime.stun, U.stun);
         }
       });
@@ -867,7 +919,7 @@
   function updateRabbit(dt) {
     if (rabbit.hp <= 0) return;
 
-    if (!R.ultUsed && rabbit.hp <= rabbit.maxHp * CFG.rabbit.ult.hpThreshold) castIce();
+    if (R.ultLeft > 0 && rabbit.hp <= rabbit.maxHp * CFG.rabbit.ult.hpThreshold) castIce();
 
     if (R.lockT > 0) {
       R.lockT = Math.max(0, R.lockT - dt);
@@ -987,10 +1039,10 @@
       if (b.life <= 0) { blobs.splice(i, 1); continue; }
 
       if (rabbit.hp > 0 && Math.hypot(rabbit.x - b.x, rabbit.y - b.y) <= b.r + rabbit.rc * 0.9) {
-        const dealt = damage(rabbit, Math.round(rabbit.maxHp * CFG.slime.spit.dmgRatio), { source: slime, color: '#2f9e3f' });
+        const dealt = damage(rabbit, atkDmg(slime, CFG.slime.spit.dmgAtkRatio), { source: slime, color: '#2f9e3f' });
         if (dealt > 0) {
           slime.hits++;
-          heal(slime, Math.round(slime.maxHp * CFG.slime.lifesteal), '#2f9e3f');
+          heal(slime, atkDmg(slime, CFG.slime.lifestealAtk), '#2f9e3f');
         }
         blobs.splice(i, 1);
         continue;
@@ -1089,7 +1141,7 @@
       slime.sky = S.moral.air;
     } else if (S.moral.cd <= 0 && slime.frozen <= 0) {
       const dist = Math.hypot(rabbit.x - slime.x, rabbit.y - slime.y);
-      const watchUlt = !R.ultUsed && rabbit.hp <= rabbit.maxHp * M.watchHp;  // 等大招对轴
+      const watchUlt = R.ultLeft > 0 && rabbit.hp <= rabbit.maxHp * M.watchHp;  // 等大招对轴
       const swinging = R.on && !R.hitDone && dist <= M.threatRange;          // 锤子正抡过来
       const lowHp = slime.hp <= slime.maxHp * M.lowHp;                       // 自己快死了
       const forced = S.moral.readyFor >= M.holdMax;                          // 留太久，必须用掉
@@ -1654,15 +1706,16 @@
       setSkill('skHammer', left <= 0.05 ? 'ready' : '', left <= 0.05 ? '就绪' : '冷却', left.toFixed(1) + 's', 1 - left / HM.period);
     }
 
-    if (!R.ultUsed) {
-      const need = clamp((rabbit.hp / rabbit.maxHp - CFG.rabbit.ult.hpThreshold) / (1 - CFG.rabbit.ult.hpThreshold), 0, 1);
-      setSkill('skUlt', 'ready', '待触发', Math.round(rabbit.hp / rabbit.maxHp * 100) + '%', need);
+    const ultTag = R.ultLeft + '/' + CFG.rabbit.ult.uses;
+    if (R.ultLeft <= 0) {
+      setSkill('skUlt', '', '已用尽', '0/' + CFG.rabbit.ult.uses, 0);
     } else if (R.lockT > 0) {
       setSkill('skUlt', 'lock', '锁血中', R.lockT.toFixed(1) + 's', R.lockT / CFG.rabbit.ult.lockDur);
     } else if (R.iceT > 0) {
       setSkill('skUlt', 'active', '冰岛展开', R.iceT.toFixed(1) + 's', R.iceT / CFG.rabbit.ult.iceDur);
     } else {
-      setSkill('skUlt', '', '已释放', '—', 0);
+      const need = clamp((rabbit.hp / rabbit.maxHp - CFG.rabbit.ult.hpThreshold) / (1 - CFG.rabbit.ult.hpThreshold), 0, 1);
+      setSkill('skUlt', 'ready', '待触发', ultTag, need);
     }
 
     const M = CFG.slime.moral;
@@ -1706,13 +1759,15 @@
       + '<div class="row"><span class="k">命中</span><span>' + rabbit.hits + ' 次</span><span class="v"></span></div>'
       + '<div class="row"><span class="k">速度</span><span>' + Math.round(rabbit.sp) + ' px/s</span><span class="v"></span></div>'
       + '<div class="row"><span class="k">坐标</span><span>' + Math.round(rabbit.x) + ', ' + Math.round(rabbit.y) + '</span><span class="v"></span></div>'
-      + '<div class="row"><span class="k">大招</span><span>' + (R.ultUsed ? (R.lockT > 0 ? '锁血 ' + R.lockT.toFixed(1) + 's' : '已释放') : '待触发 &lt; ' + Math.round(U.hpThreshold * 100) + '%') + '</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">大招次数</span><span>剩 ' + R.ultLeft + ' / ' + U.uses + ' 次</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">下次回血</span><span>' + fmt(Math.round(rabbit.dealt * U.healRatio)) + '</span><span class="v"></span></div>'
+      + '<div class="row"><span class="k">累计回血</span><span>' + fmt(rabbit.healed) + '</span><span class="v"></span></div>'
       + rowBar('最近 10s 承伤', takenBetween(rabbit, 0, 10) / rabbit.maxHp, fmt(takenBetween(rabbit, 0, 10)));
 
     document.getElementById('detailB').innerHTML =
       '<h3>史莱姆</h3>'
       + rowBar('生命', slime.hp / slime.maxHp, fmt(slime.hp) + ' / ' + fmt(slime.maxHp))
-      + rowBar('单球伤害', CFG.slime.spit.dmgRatio, fmt(slime.maxHp * CFG.slime.spit.dmgRatio))
+      + rowBar('单球伤害', CFG.slime.spit.dmgAtkRatio, fmt(atkDmg(slime, CFG.slime.spit.dmgAtkRatio)))
       + '<div class="row"><span class="k">状态</span><span>' + tagOf(slime) + '</span><span class="v"></span></div>'
       + '<div class="row"><span class="k">输出 / 承伤</span><span>' + fmt(slime.dealt) + ' / ' + fmt(slime.taken) + '</span><span class="v"></span></div>'
       + '<div class="row"><span class="k">吸血回复</span><span>' + fmt(slime.healed) + '</span><span class="v"></span></div>'
@@ -1836,13 +1891,17 @@
   window.addEventListener('resize', resize);
 
   window.__sim = {
+    pause() { paused = true; },
+    resume() { paused = false; last = performance.now(); acc = 0; },
     advance(sec) { for (let i = 0; i < sec * 60; i++) update(1 / 60); render(); updateUI(1); },
     state() {
       return {
         clock, over,
         hp: [Math.round(rabbit.hp), Math.round(slime.hp)],
         dealt: [Math.round(rabbit.dealt), Math.round(slime.dealt)],
-        ult: R.ultUsed, iceT: +R.iceT.toFixed(2), freezeT: +R.freezeT.toFixed(2),
+        hits: [rabbit.hits, slime.hits],
+        ultLeft: R.ultLeft, ultCount: R.ultCount, healed: [Math.round(rabbit.healed), Math.round(slime.healed)],
+        iceT: +R.iceT.toFixed(2), freezeT: +R.freezeT.toFixed(2),
         moral: { cd: +S.moral.cd.toFixed(1), air: +S.moral.air.toFixed(1), wait: +S.moral.readyFor.toFixed(1) },
         history: { cd: +S.history.cd.toFixed(1), mute: +S.history.mute.toFixed(1), wait: +S.history.readyFor.toFixed(1) },
         blobs: blobs.length
@@ -1911,7 +1970,10 @@
   let last = performance.now(), acc = 0;
   const STEP = 1 / 60;
 
+  let paused = false;          // 调试用：暂停实时主循环，改由 __sim.advance 手动推进
+
   function loop(now) {
+    if (paused) { requestAnimationFrame(loop); return; }
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
     acc += dt;
