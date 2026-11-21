@@ -3,6 +3,7 @@
 一个**单文件、可实时演算**的 2D 擂台对战 Demo：白兔扛着巨锤绕身旋转，史莱姆靠喷吐小球和两个「哲学技能」周旋。所有战斗都是每帧实时计算的，不是视频，也不是播片。
 
 打开 `bounce-duel/duel-live.html` 就能看，无需服务器、无需联网（图片全部 base64 内联）。
+<img width="1118" height="645" alt="image" src="https://github.com/user-attachments/assets/152f37f5-a63d-45be-9358-79ed6350d57d" />
 
 ```
 兔子  10000 生命 / 3000 攻击     巨锤环绕 · 冰岛冲击（3 次）
