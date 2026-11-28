@@ -36,3 +36,6 @@ bounce-duel/_meas_prof*/
 bounce-duel/_qr_prof*/
 bounce-duel/_*_prof*/
 bounce-duel/_*_prof_*/
+
+# 同步到 bunny-vs-slime-html 用的临时克隆
+.sync-html/
