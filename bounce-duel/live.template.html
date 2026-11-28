@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>兔子 vs 史莱姆 vs 摇摆鸭 · 实时演算 v3.0</title>
+<title>兔子 vs 史莱姆 vs 摇摆鸭 · 实时演算 v3.1</title>
 <!--
   ============================================================================
-  兔子 vs 史莱姆 vs 摇摆鸭 · 实时演算 v3.0
+  兔子 vs 史莱姆 vs 摇摆鸭 · 实时演算 v3.1
   ----------------------------------------------------------------------------
   单文件，双击即可运行；所有图片以 base64 内联。
 
@@ -42,21 +42,22 @@
     slime.history.reflectRatio  反弹 = 最近 10s 窗口承伤的 20%
     slime.history.needRatio     最近 10s 承伤超过多少才值得放（0.12）
 
-  【v3.0 摇摆鸭 · 中立单位】
-    duck.size                   立绘长边（128）
-    duck.speed                  基础游走速度（250）
-    duck.alpha                  未入阵营时的半透明度（0.55）
-    duck.chase                  追向双方中点的力度（0.55）
-    duck.hitCooldown            同一角色的连续撞击计数间隔（0.28s，防止一帧算十次）
-    duck.hitsPerRound           每多少次撞击结算一次增益（20）
+  【v3.1 摇摆鸭 · 中立单位】
+    duck.size                   立绘长边（140）
+    duck.speed                  基础游走速度（320）
+    duck.alpha                  未入阵营时的半透明度（0.72）
+    duck.chase                  追向双方中点的力度（0.95）
+    duck.hitCooldown            同一角色的连续撞击计数间隔（0.34s，防止一帧算十次）
+    duck.hitsPerRound           第一轮需要的撞击数（20）
+    duck.hitsPerStep            之后每结算一次，所需撞击数 +2（20 → 22 → 24…）
     duck.buff.hpMax / atkMax    两条增益滑块的上限（0.40 / 0.30 = 最多 +40% / +30%）
     duck.buff.hpDefault         弹窗滑块初始值（0.18 = +18% 生命）
-    duck.buff.atkDefault        弹窗滑块初始值（0.12 = +12% 攻击）
+    duck.buff.atkDefault        弹窗滑块初始值（0.14 = +14% 攻击）
     duck.buff.autoConfirm       true = 不弹窗，直接按默认值结算（脚本批量跑用）
 
   规则：摇摆鸭一开场就在场中央，半透明、可被撞动、可被锤子和史莱姆的球打到。
-        每累计 20 次撞击，**第 20 次撞击者的对手**获得增益（并清空上一次增益），
-        第 40、60… 次同理，直到分出胜负。
+        撞击数一直累加；第一轮满 20 次、之后每轮 22 / 24 / 26… 次时结算，
+        **结算那一击的撞击者的对手**获得增益（并清空上一次增益），直到分出胜负。
 
   【语音播报】
   用浏览器自带 TTS（speechSynthesis），播报技能释放、对轴、K.O. 和 MVP。
@@ -303,7 +304,7 @@
   .sound-hint.hide{opacity:0}
 
   .banner{
-    position:absolute;left:50%;top:8%;transform:translateX(-50%);
+    position:absolute;left:50%;top:17%;transform:translateX(-50%);
     pointer-events:none;white-space:nowrap;
     padding:5px 20px 7px;border-radius:12px;
     background:rgba(6,30,46,.62);border:2px solid rgba(143,216,255,.5);
@@ -364,11 +365,26 @@
 
   /* ---------- v3.0 摇摆鸭：状态条 / 版本角标 ---------- */
   .duck-chip{
-    position:absolute;left:10px;top:10px;z-index:8;
-    display:flex;align-items:center;gap:9px;padding:6px 12px 6px 8px;
-    background:rgba(255,255,255,.9);border:2.5px solid var(--ink);border-radius:12px;
+    position:absolute;left:50%;top:9px;transform:translateX(-50%);z-index:8;
+    display:flex;align-items:center;gap:9px;padding:6px 14px 6px 8px;
+    background:rgba(255,255,255,.93);border:2.5px solid var(--ink);border-radius:14px;
     box-shadow:0 3px 0 rgba(10,42,63,.75);
-    max-width:min(330px,72%);
+    max-width:min(430px,88%);
+    transition:opacity .18s ease, transform .18s ease;
+  }
+  .duck-chip.hide{display:none}
+
+  /* 加入阵营后：鸭子头像出现在那一侧的卡片上 */
+  .card-top .duck-badge{
+    display:none;width:30px;height:30px;flex:none;margin-left:auto;border-radius:50%;
+    overflow:hidden;background:#fff;border:2px solid #ffd166;
+    box-shadow:0 0 0 2px rgba(255,209,102,.28);
+  }
+  .card-top .duck-badge.on{display:block;animation:duckPulse 1.8s ease-in-out infinite}
+  .card-top .duck-badge img{width:100%;height:100%;object-fit:cover;display:block}
+  @keyframes duckPulse{
+    0%,100%{box-shadow:0 0 0 2px rgba(255,209,102,.28)}
+    50%{box-shadow:0 0 0 4px rgba(255,209,102,.12),0 0 12px rgba(255,209,102,.85)}
   }
   .duck-chip img{width:32px;height:32px;object-fit:contain;flex:none;filter:drop-shadow(0 1px 0 rgba(10,42,63,.25))}
   .duck-chip .dt{min-width:0;flex:1}
@@ -388,134 +404,156 @@
   }
   body.ice-mode .ver-chip{background:rgba(6,30,46,.9)}
 
-  /* ---------- v3.0 增益弹窗（B 站登录风） ---------- */
+  /* ---------- 增益弹窗：1:1 复刻 B 站登录框（v3.1） ---------- */
   .bili-mask{
     position:fixed;inset:0;z-index:200;display:none;
     align-items:center;justify-content:center;
-    background:rgba(0,0,0,.52);
-    backdrop-filter:blur(2px);
-    font-family:"PingFang SC","Microsoft YaHei",ui-sans-serif,system-ui,sans-serif;
+    background:rgba(0,0,0,.55);
+    font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",ui-sans-serif,sans-serif;
     color:#18191c;
   }
-  .bili-mask.show{display:flex;animation:biliFade .18s ease both}
-  @keyframes biliFade{from{opacity:0}to{opacity:1}}
+  .bili-mask.show{display:flex}
   .bili-card{
-    position:relative;width:min(1010px,94vw);background:#fff;border-radius:8px;
-    box-shadow:0 12px 48px rgba(0,0,0,.28);
-    max-height:92vh;overflow:auto;
-    animation:biliPop .22s cubic-bezier(.2,.9,.3,1) both;
+    position:relative;width:1010px;height:600px;flex:none;
+    background:#fff;border-radius:8px;overflow:hidden;
+    box-shadow:0 12px 48px rgba(0,0,0,.3);
+    transform:scale(var(--bs,1));transform-origin:center center;
   }
-  @keyframes biliPop{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+  .bili-mask *{box-sizing:border-box}
+
+  .bili-deco{position:absolute;bottom:-22px;pointer-events:none;user-select:none;opacity:.92}
+  .bili-deco-l{left:-14px;width:108px}
+  .bili-deco-r{right:-10px;width:96px}
+
   .bili-close{
-    position:absolute;right:14px;top:12px;z-index:3;
-    width:32px;height:32px;padding:0;border:0;border-radius:6px;background:transparent;
-    box-shadow:none;color:#757575;font-size:20px;font-weight:400;line-height:1;
-    display:flex;align-items:center;justify-content:center;
+    position:absolute;right:14px;top:12px;z-index:5;width:36px;height:36px;padding:0;
+    border:0;background:transparent;color:#18191c;font-size:23px;font-weight:300;line-height:1;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:4px;
+    box-shadow:none;
   }
-  .bili-close:hover{background:#f1f2f3;color:#18191c}
+  .bili-close:hover{background:#f4f5f7;color:#00aeec}
+  .bili-close:active{transform:none;box-shadow:none}
   .bili-designer{
-    position:absolute;right:56px;top:14px;z-index:3;
-    height:28px;padding:0 12px;border:1px solid #e3e5e7;border-radius:6px;background:#fff;
-    color:#61666d;font-size:12px;font-weight:700;box-shadow:none;
+    position:absolute;right:56px;top:17px;z-index:5;height:26px;padding:0 10px;
+    border:1px solid #e3e5e7;border-radius:4px;background:#fff;color:#9499a0;
+    font-family:inherit;font-size:12px;font-weight:400;box-shadow:none;cursor:pointer;
   }
-  .bili-designer:hover{background:#f6f7f8;color:#00aeec;border-color:#c9eaf7}
+  .bili-designer:hover{color:#00aeec;border-color:#8fd4f6;background:#f7fcff}
   .bili-designer:active{transform:none;box-shadow:none}
 
-  .bili-body{display:flex;align-items:stretch;padding:40px 0 26px}
-  .bili-left{width:45%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 20px 8px}
-  .bili-qr-t{font-size:19px;font-weight:600;letter-spacing:.02em;margin-bottom:22px;color:#18191c}
+  /* 左栏：二维码 */
+  .bili-left{
+    position:absolute;left:0;top:0;width:399px;height:460px;
+    display:flex;flex-direction:column;align-items:center;
+  }
+  .bili-qr-t{margin-top:58px;font-size:19px;font-weight:500;letter-spacing:.6px;color:#18191c}
   .bili-qr{
-    width:200px;height:200px;padding:8px;border:1px solid #e3e5e7;border-radius:6px;background:#fff;
+    margin-top:26px;width:213px;height:213px;padding:9px;
+    border:1px solid #e3e5e7;border-radius:4px;background:#fff;
   }
   .bili-qr img{width:100%;height:100%;display:block;image-rendering:pixelated}
-  .bili-qr-tip{margin-top:20px;text-align:center;font-size:13px;line-height:1.75;color:#9499a0}
-  .bili-qr-tip b{color:#00aeec;font-weight:600}
-  .bili-divider{width:1px;background:#e3e5e7;margin:6px 0 10px}
+  .bili-qr-tip{margin-top:45px;font-size:14px;line-height:26px;text-align:center;color:#9499a0}
+  .bili-qr-tip b{color:#00aeec;font-weight:400}
 
-  .bili-right{width:55%;padding:2px 52px 0 46px;display:flex;flex-direction:column;min-width:0;min-height:468px}
-  .bili-tabs{display:flex;align-items:center;gap:18px;font-size:19px;font-weight:600;color:#9499a0;margin-bottom:20px}
-  .bili-tabs .on{color:#00aeec;position:relative}
-  .bili-tabs .on::after{
-    content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:-9px;
-    width:26px;height:3px;border-radius:2px;background:#00aeec;
+  .bili-vline{position:absolute;left:399px;top:92px;width:1px;height:330px;background:#e3e5e7}
+
+  /* 右栏：增益配置 */
+  .bili-right{
+    position:absolute;left:400px;right:0;top:0;height:460px;
+    padding:55px 55px 0 58px;display:flex;flex-direction:column;
   }
-  .bili-tabs i{width:1px;height:16px;background:#e3e5e7;display:block}
-  .bili-tabs .tab{cursor:pointer}
+  .bili-tabs{display:flex;align-items:center;height:32px;font-size:20px;font-weight:500;color:#9499a0}
+  .bili-tabs .tab{cursor:pointer;transition:color .15s}
+  .bili-tabs .tab:hover{color:#00aeec}
+  .bili-tabs .tab.on{color:#00aeec}
+  .bili-tabs i{width:1px;height:15px;background:#e3e5e7;margin:0 22px;display:block}
 
-  .bili-pane{display:none}
+  .bili-pane{display:none;margin-top:28px}
   .bili-pane.on{display:block}
 
-  .bili-target{
-    display:flex;align-items:center;gap:10px;margin-bottom:6px;
-    font-size:13px;font-weight:600;color:#61666d;
+  .bili-box{border:1px solid #e3e5e7;border-radius:8px;overflow:hidden;background:#fff}
+  .bili-row{display:flex;align-items:center;height:70px;padding:0 20px;background:#fff;margin:0}
+  .bili-row + .bili-row{border-top:1px solid #e3e5e7}
+  .bili-row .lb{flex:none;width:78px;font-size:16px;font-weight:400;color:#18191c}
+  .bili-row .ctl{flex:1;display:flex;align-items:center;gap:14px;min-width:0}
+  .bili-row .fv{
+    flex:none;width:62px;text-align:right;font-size:17px;font-weight:600;
+    color:#00aeec;font-variant-numeric:tabular-nums;
   }
-  .bili-target .who{display:flex;align-items:center;gap:7px;padding:4px 11px 4px 5px;border-radius:20px;
-    border:1px solid #e3e5e7;background:#fafbfc}
-  .bili-target .who img{width:22px;height:22px;object-fit:contain;border-radius:50%;background:#f1f2f3}
-  .bili-target .who b{font-size:13.5px;color:#18191c}
-  .bili-target .who.beat{border-color:#ffb6b0;background:#fff6f5}
-  .bili-target .who.beat b{color:#f0392b}
-
-  .bili-field{padding:15px 0 13px;border-bottom:1px solid #f1f2f3}
-  .bili-field .fl{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
-  .bili-field .fl span{font-size:14px;font-weight:600;color:#18191c}
-  .bili-field .fl em{font-style:normal;font-size:12px;color:#9499a0}
-  .bili-field .fv{font-size:15px;font-weight:700;color:#00aeec;font-variant-numeric:tabular-nums}
-
-  /* 滑块：B 站蓝 + 圆形滑块头 */
-  .bili-range{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;cursor:pointer;display:block}
-  .bili-range::-webkit-slider-runnable-track{height:6px;border-radius:4px;background:#e9ecef}
-  .bili-range::-moz-range-track{height:6px;border-radius:4px;background:#e9ecef}
+  .bili-range{
+    -webkit-appearance:none;appearance:none;flex:1;height:20px;margin:0;padding:0;
+    background:transparent;border:0;box-shadow:none;cursor:pointer;display:block;
+  }
+  .bili-range::-webkit-slider-runnable-track{
+    height:4px;border-radius:2px;
+    background:linear-gradient(90deg,#00aeec var(--p,0%),#e3e5e7 var(--p,0%));
+  }
+  .bili-range::-moz-range-track{
+    height:4px;border-radius:2px;
+    background:linear-gradient(90deg,#00aeec var(--p,0%),#e3e5e7 var(--p,0%));
+  }
   .bili-range::-webkit-slider-thumb{
-    -webkit-appearance:none;appearance:none;width:16px;height:16px;margin-top:-5px;border-radius:50%;
-    background:#fff;border:3px solid #00aeec;box-shadow:0 1px 4px rgba(0,161,214,.4);
-    transition:transform .1s ease;
+    -webkit-appearance:none;appearance:none;width:14px;height:14px;margin-top:-5px;
+    border-radius:50%;background:#fff;border:2px solid #00aeec;
+    box-shadow:0 1px 4px rgba(0,174,236,.35);transition:transform .1s;
   }
-  .bili-range::-webkit-slider-thumb:hover{transform:scale(1.12)}
+  .bili-range:hover::-webkit-slider-thumb{transform:scale(1.14)}
   .bili-range::-moz-range-thumb{
-    width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #00aeec;
-    box-shadow:0 1px 4px rgba(0,161,214,.4);
+    width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #00aeec;
+    box-shadow:0 1px 4px rgba(0,174,236,.35);
   }
-  .bili-scale{display:flex;justify-content:space-between;font-size:11px;color:#c0c4cc;margin-top:2px;font-variant-numeric:tabular-nums}
 
-  .bili-preview{
-    margin-top:14px;padding:11px 14px;border-radius:6px;background:#f6f9fb;border:1px solid #e8f4fa;
-    font-size:12.5px;line-height:1.9;color:#61666d;font-variant-numeric:tabular-nums;
-  }
-  .bili-preview b{color:#18191c}
-  .bili-preview .plus{color:#f0392b;font-weight:700}
-
-  .bili-actions{display:flex;gap:14px;margin-top:18px}
+  .bili-actions{display:flex;gap:14px;margin-top:12px}
   .bili-btn{
-    flex:1;height:44px;border-radius:6px;font-size:16px;font-weight:600;cursor:pointer;
-    border:1px solid #e3e5e7;background:#fff;color:#18191c;box-shadow:none;
+    flex:1;height:48px;border-radius:8px;font-family:inherit;font-size:16px;font-weight:400;
+    border:1px solid #e3e5e7;background:#fff;color:#18191c;cursor:pointer;box-shadow:none;
+    transition:background .15s,border-color .15s;
   }
   .bili-btn:hover{background:#f6f7f8}
   .bili-btn:active{transform:none;box-shadow:none}
   .bili-btn.primary{background:#00aeec;border-color:#00aeec;color:#fff}
-  .bili-btn.primary:hover{background:#33beee;border-color:#33beee}
+  .bili-btn.primary:hover{background:#22baf0;border-color:#22baf0}
 
-  .bili-agree{margin-top:14px;font-size:12px;line-height:1.8;color:#9499a0}
-  .bili-agree b{color:#00aeec;font-weight:600}
+  /* 增益对象（对应「其他方式登录」） */
+  .bili-social{margin-top:auto;text-align:center;padding-bottom:2px}
+  .bili-social .ot{font-size:13px;color:#9499a0;margin-bottom:14px}
+  .bili-social .socials{display:flex;justify-content:center;gap:56px}
+  .bili-social .so{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .bili-social .so i{
+    width:40px;height:40px;border-radius:50%;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+  }
+  #soRabbit i{background:#ff5a3c}
+  #soDuck i{background:#ffb62e}
+  #soSlime i{background:#2f9e3f}
+  .bili-social .so img{
+    width:62%;height:62%;object-fit:contain;display:block;
+    filter:brightness(0) invert(1);
+  }
+  .bili-social .so span{font-size:13px;color:#9499a0;transition:color .15s}
+  .bili-social .so.hot i{box-shadow:0 0 0 2px #ffd166,0 0 12px rgba(255,209,102,.75)}
+  .bili-social .so.hot span{color:#18191c;font-weight:600}
 
-  .bili-foot{border-top:1px solid #f1f2f3;padding:12px 0 14px;text-align:center}
-  .bili-foot .ot{font-size:12.5px;color:#9499a0;margin-bottom:9px}
-  .bili-foot .socials{display:flex;justify-content:center;gap:30px}
-  .bili-foot .so{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11.5px;color:#9499a0;
-    filter:grayscale(1) opacity(.55);transition:filter .15s ease}
-  .bili-foot .so img{width:32px;height:32px;object-fit:cover;border-radius:50%;background:#f1f2f3}
-  .bili-foot .so.hot{filter:none;color:#18191c;font-weight:700}
-  .bili-foot .so.hot img{box-shadow:0 0 0 2px #ffd166}
-  .bili-target-pane{font-size:13px;color:#61666d;line-height:1.9}
-  .bili-target-pane table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
-  .bili-target-pane td{padding:7px 0;border-bottom:1px solid #f1f2f3}
-  .bili-target-pane td:first-child{color:#9499a0;width:42%}
-  .bili-target-pane td:last-child{text-align:right;font-weight:700;color:#18191c}
+  /* 底部条款（对应「未注册过哔哩哔哩的手机号…」） */
+  .bili-legal{
+    position:absolute;left:0;right:0;bottom:44px;text-align:center;
+    font-size:13px;line-height:25px;color:#9499a0;
+  }
+  .bili-legal b{color:#00aeec;font-weight:400}
+
+  /* 第二页：增益对象详情 */
+  .bili-box.tight .bili-row{height:60px}
+  .bili-box.tight .lb{width:120px;color:#9499a0;font-size:15px}
+  .bili-row .val{
+    flex:1;text-align:right;font-size:15px;color:#18191c;font-variant-numeric:tabular-nums;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .bili-row .val b{color:#00aeec;font-weight:600}
 
   /* ---------- 策划面板 ---------- */
   .designer{
     position:fixed;z-index:210;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:min(560px,92vw);max-height:84vh;overflow:auto;display:none;
+    width:min(560px,92vw);max-height:90vh;overflow:auto;display:none;
     background:#fff;border-radius:8px;box-shadow:0 12px 48px rgba(0,0,0,.3), 0 0 0 100vmax rgba(0,0,0,.35);
     font-family:"PingFang SC","Microsoft YaHei",ui-sans-serif,sans-serif;color:#18191c;
   }
@@ -524,7 +562,7 @@
     display:flex;align-items:center;justify-content:space-between}
   .designer h3 span{font-size:11.5px;font-weight:600;color:#9499a0}
   .designer .dbody{padding:8px 20px 4px}
-  .drow{display:grid;grid-template-columns:1fr 96px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px dashed #f0f2f4}
+  .drow{display:grid;grid-template-columns:1fr 96px;gap:12px;align-items:center;padding:6px 0;border-bottom:1px dashed #f0f2f4}
   .drow .dk{font-size:13px;color:#61666d;font-weight:600}
   .drow .dk small{display:block;font-size:10.5px;color:#c0c4cc;font-weight:400;margin-top:2px;font-family:ui-monospace,Consolas,monospace}
   .drow input[type=number]{
@@ -576,7 +614,7 @@
           <div class="dt"><b id="duckName">摇摆鸭 · 中立</b><span id="duckState">撞击 0 / 20</span></div>
           <div class="dp"><i id="duckProg"></i></div>
         </div>
-        <div class="ver-chip">v3.0</div>
+        <div class="ver-chip">v3.1</div>
         <div class="banner" id="banner"></div>
         <div class="overlay" id="overlay">
           <div class="ko" id="koText">K.O.</div>
@@ -601,87 +639,76 @@
 </div>
 
 <!-- ==========================================================================
-     v3.0 摇摆鸭 · 增益结算弹窗（B 站登录界面改造）
+     v3.1 摇摆鸭 · 增益结算弹窗（1:1 复刻 B 站登录框，只换元素）
      ========================================================================== -->
 <div class="bili-mask" id="biliMask">
   <div class="bili-card">
-    <button class="bili-close" id="biliClose" title="关闭并继续">✕</button>
+    <img class="bili-deco bili-deco-l" id="decoL" alt="">
+    <img class="bili-deco bili-deco-r" id="decoR" alt="">
     <button class="bili-designer" id="btnDesigner">策划面板</button>
+    <button class="bili-close" id="biliClose" title="关闭并继续">✕</button>
 
-    <div class="bili-body">
-      <div class="bili-left">
-        <div class="bili-qr-t">扫描二维码</div>
-        <div class="bili-qr"><img id="biliQr" src="__IMG_QR__" alt="QR"></div>
-        <div class="bili-qr-tip">请使用 <b>手机相机</b> 扫码<br>打开本项目的 GitHub 主页</div>
+    <div class="bili-left">
+      <div class="bili-qr-t">扫描二维码登录</div>
+      <div class="bili-qr"><img id="biliQr" src="__IMG_QR__" alt="QR"></div>
+      <div class="bili-qr-tip">请使用 <b>手机浏览器</b> 扫码<br>扫码打开本项目主页</div>
+    </div>
+
+    <div class="bili-vline"></div>
+
+    <div class="bili-right">
+      <div class="bili-tabs">
+        <span class="tab on" data-pane="cfg">增益配置</span>
+        <i></i>
+        <span class="tab" data-pane="info">增益对象</span>
       </div>
 
-      <div class="bili-divider"></div>
-
-      <div class="bili-right">
-        <div class="bili-tabs">
-          <span class="tab on" data-pane="cfg">增益配置</span>
-          <i></i>
-          <span class="tab" data-pane="info">增益对象</span>
-        </div>
-
-        <div class="bili-pane on" id="paneCfg">
-          <div class="bili-target">
-            <span>增益对象</span>
-            <span class="who beat" id="biliWho">
-              <img id="biliWhoImg" alt="">
-              <b id="biliWhoName">史莱姆</b>
+      <div class="bili-pane on" id="paneCfg">
+        <div class="bili-box">
+          <div class="bili-row">
+            <span class="lb">基础生命</span>
+            <span class="ctl">
+              <input class="bili-range" id="sldHp" type="range" min="0" max="40" step="1" value="18">
+              <b class="fv" id="valHp">+18%</b>
             </span>
-            <span id="biliRound" style="margin-left:auto;color:#c0c4cc;font-size:12px">第 1 次结算</span>
           </div>
-
-          <div class="bili-field">
-            <div class="fl"><span>基础生命值 <em>上限 +40%</em></span><b class="fv" id="valHp">+18%</b></div>
-            <input class="bili-range" id="sldHp" type="range" min="0" max="40" step="1" value="18">
-            <div class="bili-scale"><span>0%</span><span>+20%</span><span>+40%</span></div>
-          </div>
-
-          <div class="bili-field">
-            <div class="fl"><span>基础攻击力 <em>上限 +30%</em></span><b class="fv" id="valAtk">+14%</b></div>
-            <input class="bili-range" id="sldAtk" type="range" min="0" max="30" step="1" value="14">
-            <div class="bili-scale"><span>0%</span><span>+15%</span><span>+30%</span></div>
-          </div>
-
-          <div class="bili-preview" id="biliPreview"></div>
-
-          <div class="bili-actions">
-            <button class="bili-btn" id="biliDefault">恢复默认</button>
-            <button class="bili-btn primary" id="biliConfirm">确认修改</button>
-          </div>
-
-          <div class="bili-agree">增益只在本次结算生效，下一次结算会先清空旧增益。<b>确认修改</b>后立即继续对局。</div>
-        </div>
-
-        <div class="bili-pane" id="paneInfo">
-          <div class="bili-target-pane">
-            <table>
-              <tr><td>增益对象</td><td id="tgName">—</td></tr>
-              <tr><td>基础生命</td><td id="tgHp">—</td></tr>
-              <tr><td>基础攻击</td><td id="tgAtk">—</td></tr>
-              <tr><td>累计撞击</td><td id="tgHits">—</td></tr>
-              <tr><td>上一轮增益</td><td id="tgPrev">—</td></tr>
-              <tr><td>下一次结算</td><td id="tgNext">—</td></tr>
-            </table>
+          <div class="bili-row">
+            <span class="lb">基础攻击</span>
+            <span class="ctl">
+              <input class="bili-range" id="sldAtk" type="range" min="0" max="30" step="1" value="14">
+              <b class="fv" id="valAtk">+14%</b>
+            </span>
           </div>
         </div>
 
-        <div class="bili-foot">
-          <div class="ot">增益对象</div>
-          <div class="socials">
-            <div class="so" id="soRabbit"><img id="soRabbitImg" alt=""><span>兔子</span></div>
-            <div class="so hot" id="soDuck"><img id="soDuckImg" alt=""><span>摇摆鸭</span></div>
-            <div class="so" id="soSlime"><img id="soSlimeImg" alt=""><span>史莱姆</span></div>
-          </div>
+        <div class="bili-actions">
+          <button class="bili-btn" id="biliDefault">恢复默认</button>
+          <button class="bili-btn primary" id="biliConfirm">确认修改</button>
+        </div>
+      </div>
+
+      <div class="bili-pane" id="paneInfo">
+        <div class="bili-box tight">
+          <div class="bili-row"><span class="lb">增益对象</span><span class="val" id="tgName">—</span></div>
+          <div class="bili-row"><span class="lb">当前 生命 / 攻击</span><span class="val" id="tgStat">—</span></div>
+          <div class="bili-row"><span class="lb">累计撞击</span><span class="val" id="tgHits">—</span></div>
+          <div class="bili-row"><span class="lb">下一次结算</span><span class="val" id="tgNext">—</span></div>
+        </div>
+      </div>
+
+      <div class="bili-social">
+        <div class="ot">增益对象</div>
+        <div class="socials">
+          <div class="so" id="soRabbit"><i><img id="soRabbitImg" alt=""></i><span>兔子</span></div>
+          <div class="so hot" id="soDuck"><i><img id="soDuckImg" alt=""></i><span>摇摆鸭</span></div>
+          <div class="so" id="soSlime"><i><img id="soSlimeImg" alt=""></i><span>史莱姆</span></div>
         </div>
       </div>
     </div>
 
-    <div class="bili-agree" style="padding:0 52px 20px">
-      摇摆鸭不偏袒任何一方：它把力量交给<b>最后一个撞它的人的对手</b>。每 20 次撞击重新结算一次，直到分出胜负。
+    <div class="bili-legal">
+      摇摆鸭每结算一次，所需撞击数 +2；上一轮增益会在下次结算时被清空<br>
+      确认修改即代表你同意 <b>增益规则</b> 和 <b>结算协议</b>
     </div>
   </div>
 </div>
@@ -807,7 +834,8 @@
       chase: 0.95,           // 追向双方中点的力度（越大越爱挡在中间挨打）
       drag: 1.35,            // 速度回落到基础速度的快慢
       hitCooldown: 0.34,     // 同一角色的连续撞击计数间隔（防止一帧算十次）
-      hitsPerRound: 20,      // 每 20 次撞击结算一次增益
+      hitsPerRound: 20,      // 第一轮需要 20 次撞击
+      hitsPerStep: 2,        // 之后每结算一次，所需撞击数 +2（20 → 22 → 24 …）
       knock: 430,            // 被锤子打中时的击飞速度
       buff: {
         hpMax: 0.40,         // 生命增益上限（滑块上限）
@@ -1073,7 +1101,9 @@
   const duck = {
     x: W / 2, y: H / 2, vx: 0, vy: 0, sp: CFG.duck.speed,
     dw: 1, dh: 1, hw: 1, hh: 1, rc: 1,
-    hits: 0,
+    hits: 0,                   // 累计撞击总数（只增不减）
+    roundHits: 0,              // 本轮已积累的撞击数
+    sq: 0, sqV: 0,             // Q 弹用的阻尼弹簧（压扁量 / 速度）
     cd: { left: -99, right: -99 },
     last: null, lastSide: null,
     join: null,                 // 'left' / 'right'：当前被增益的阵营
@@ -1168,7 +1198,8 @@
     R.lockT = 0; R.iceT = 0; R.freezeT = 0;
 
     // ---- 摇摆鸭：回到场地中央，撞击数与增益全部清零 ----
-    duck.hits = 0; duck.cd.left = -99; duck.cd.right = -99;
+    duck.hits = 0; duck.roundHits = 0; duck.sq = 0; duck.sqV = 0;
+    duck.cd.left = -99; duck.cd.right = -99;
     duck.last = null; duck.lastSide = null; duck.join = null;
     duck.flash = 0; duck.hitPop = 0; duck.wob = Math.random() * 6.28;
     duck.firstAt = 0;
@@ -1661,32 +1692,40 @@
   const SIDE_NAME = { left: '兔子', right: '史莱姆' };
   const SIDE_COLOR = { left: '#ff5a3c', right: '#2f9e3f' };
 
+  // 本轮需要的撞击数：第一轮 20，之后每结算一次 +2（20 → 22 → 24 …）
+  function duckNeed() {
+    return CFG.duck.hitsPerRound + buff.round * CFG.duck.hitsPerStep;
+  }
+
   function duckHit(source, kind) {
     if (over || !source) return;
     const k = source.side;
     if (clock - duck.cd[k] < CFG.duck.hitCooldown) return;
     duck.cd[k] = clock;
 
-    duck.hits += 1;
+    duck.hits += 1;          // 累计数：只增不减
+    duck.roundHits += 1;     // 本轮进度
     duck.last = source;
     duck.lastSide = k;
     duck.flash = 0.2;
     duck.hitPop = 0.24;
+    duck.sqV += 7.5;         // Q 弹：先压扁，弹簧再把它弹回来
 
-    const per = CFG.duck.hitsPerRound;
-    const inRound = duck.hits % per;
-    const label = inRound === 0 ? per : inRound;
+    const need = duckNeed();
+    const done = duck.roundHits >= need;
 
-    // 连续撞击时数字不要糊成一团：0.45s 内只飘一个
-    if (inRound === 0 || clock - (duck.numAt || -9) > 0.45) {
+    // 每一下都飘字，按 3 个高度错开，避免糊成一团
+    if (done || clock - (duck.numAt || -9) > 0.16) {
       duck.numAt = clock;
-      addNum(duck.x + rand(-26, 26), duck.y - duck.hh - 14 - rand(0, 16),
-        '撞击 ' + label + '/' + per, inRound === 0 ? '#ffb400' : '#5b7d92', inRound === 0 ? 21 : 15);
+      addNum(duck.x + rand(-30, 30), duck.y - duck.hh - 12 - (duck.hits % 3) * 17,
+        done ? '满 ' + need + ' 次！' : '撞击 ' + duck.roundHits + '/' + need,
+        done ? '#ffb400' : '#5b7d92', done ? 22 : 15);
     }
     fx.rings.push({ x: duck.x, y: duck.y, t: 0, dur: 0.34, r0: 6, r1: 58, color: '#ffd166', w: 2.6 });
     sfxDuck(kind);
+    shake(kind === 'hammer' ? 0.35 : 0.12);
 
-    if (inRound === 0) settleDuckBuff(source);
+    if (done) { duck.roundHits = 0; settleDuckBuff(source); }
   }
 
   // 把两位角色的增益全部还原到基础值（只可能有一位带增益）
@@ -1753,12 +1792,16 @@
     if (duck.hitPop > 0) duck.hitPop = Math.max(0, duck.hitPop - dt);
     if (over) return;
 
-    duck.wob += dt * 2.1;
+    // Q 弹：阻尼弹簧，被打时 sqV 被推一下，之后自己晃回来
+    duck.sqV += (-duck.sq * 300 - duck.sqV * 10.5) * dt;
+    duck.sq = clamp(duck.sq + duck.sqV * dt, -0.62, 0.62);
+
+    duck.wob += dt * 2.9;
     const mx = (rabbit.x + slime.x) / 2, my = (rabbit.y + slime.y) / 2;
-    const gain = CFG.duck.chase * 1.8;
-    // 目标速度 = 朝双方中点 + 左右摇摆（比例导引，比加速度式更跟得住）
-    const tx = clamp((mx - duck.x) * gain, -duck.sp, duck.sp) + Math.cos(duck.wob * 1.7) * 150;
-    const ty = clamp((my - duck.y) * gain, -duck.sp, duck.sp) + Math.sin(duck.wob * 2.3) * 150;
+    const gain = CFG.duck.chase * 1.9;
+    // 目标速度 = 朝双方中点 + 猛烈左右摇摆（比例导引，比加速度式更跟得住）
+    const tx = clamp((mx - duck.x) * gain, -duck.sp, duck.sp) + Math.cos(duck.wob * 1.9) * 250;
+    const ty = clamp((my - duck.y) * gain, -duck.sp, duck.sp) + Math.sin(duck.wob * 2.7) * 230;
     const kv = Math.min(1, dt * 2.8);
     duck.vx += (tx - duck.vx) * kv;
     duck.vy += (ty - duck.vy) * kv;
@@ -1801,7 +1844,6 @@
     duck.vy = dy / dd * CFG.duck.knock;
     duck.sp = CFG.duck.knock;
     duckHit(rabbit, 'hammer');
-    shake(0.35);
     return true;
   }
 
@@ -2123,8 +2165,11 @@
     const joined = !!duck.join;
     const col = joined ? (SIDE_COLOR[duck.join] || '#ffd166') : '#ffd166';
     const a = joined ? CFG.duck.joinedAlpha : CFG.duck.alpha;
-    const pop = duck.hitPop > 0 ? duck.hitPop / 0.24 : 0;
-    const kx = 1 + 0.09 * pop, ky = 1 - 0.09 * pop;
+    // Q 弹形变：sq > 0 压扁、< 0 拉长，再叠一点自带的果冻抖动
+    const sq = duck.sq;
+    const jelly = 1 + 0.035 * Math.sin(clock * 6.4 + duck.wob);
+    const kx = (1 + sq * 0.52) * jelly;
+    const ky = (1 - sq * 0.52) / jelly;
 
     // 地面阴影
     ctx.save();
@@ -2166,7 +2211,7 @@
     ctx.save();
     ctx.globalAlpha = a;
     ctx.translate(duck.x, duck.y);
-    ctx.rotate(Math.sin(clock * 2.4 + duck.wob) * 0.07);
+    ctx.rotate(Math.sin(clock * 3.6 + duck.wob * 1.5) * 0.15);
     ctx.scale(duck.face < 0 ? -kx : kx, ky);
     ctx.drawImage(img.duck, -duck.hw, -duck.hh, duck.dw, duck.dh);
     ctx.restore();
@@ -2182,8 +2227,8 @@
     }
 
     // 充能进度环
-    const per = CFG.duck.hitsPerRound;
-    const prog = (duck.hits % per) / per;
+    const need0 = duckNeed();
+    const prog = clamp(duck.roundHits / need0, 0, 1);
     const rr = duck.rc + 15;
     ctx.save();
     ctx.lineWidth = 3;
@@ -2207,10 +2252,10 @@
     if (!img.duck.complete || !img.duck.naturalWidth) return;
     const joined = !!duck.join;
     const col = joined ? (SIDE_COLOR[duck.join] || '#ffd166') : '#ffd166';
-    const per = CFG.duck.hitsPerRound;
+    const need = duckNeed();
     const txt = joined
-      ? '加入' + SIDE_NAME[duck.join] + ' · +' + Math.round(buff.hp * 100) + '%HP +' + Math.round(buff.atk * 100) + '%ATK'
-      : '中立 ' + (duck.hits % per) + ' / ' + per;
+      ? '加入' + SIDE_NAME[duck.join] + ' +' + Math.round(buff.hp * 100) + '%/' + Math.round(buff.atk * 100) + '% · ' + duck.hits + ' 击'
+      : '中立 ' + Math.floor(duck.roundHits) + '/' + need + ' · 累计 ' + duck.hits + ' 击';
     ctx.save();
     ctx.font = '900 15px "PingFang SC","Microsoft YaHei",sans-serif';
     const tw = ctx.measureText(txt).width;
@@ -2426,7 +2471,8 @@
     document.getElementById('hudA').innerHTML =
       '<div class="card">'
       + '<div class="card-top"><img class="avatar" src="' + IMG_SRC.a + '">'
-      + '<div class="who">兔子<small id="statA">生命 ' + fmt(CFG.rabbit.maxHp) + ' · 攻击 ' + fmt(CFG.rabbit.atk) + '</small></div></div>'
+      + '<div class="who">兔子<small id="statA">生命 ' + fmt(CFG.rabbit.maxHp) + ' · 攻击 ' + fmt(CFG.rabbit.atk) + '</small></div>'
+      + '<span class="duck-badge" id="duckBadgeA"><img id="duckBadgeImgA" alt=""></span></div>'
       + '<div class="buff-line" id="buffA"></div>'
       + '<div class="bar" id="barA"><i></i><b>10000</b></div>'
       + '<div class="stat"><span id="hpA">10000</span><span id="dpsA">DPS 0</span></div>'
@@ -2443,7 +2489,8 @@
     document.getElementById('hudB').innerHTML =
       '<div class="card">'
       + '<div class="card-top"><img class="avatar" src="' + IMG_SRC.b + '">'
-      + '<div class="who">史莱姆<small id="statB">生命 ' + fmt(CFG.slime.maxHp) + ' · 攻击 ' + fmt(CFG.slime.atk) + '</small></div></div>'
+      + '<div class="who">史莱姆<small id="statB">生命 ' + fmt(CFG.slime.maxHp) + ' · 攻击 ' + fmt(CFG.slime.atk) + '</small></div>'
+      + '<span class="duck-badge" id="duckBadgeB"><img id="duckBadgeImgB" alt=""></span></div>'
       + '<div class="buff-line" id="buffB"></div>'
       + '<div class="bar" id="barB"><i></i><b>10000</b></div>'
       + '<div class="stat"><span id="hpB">10000</span><span id="dpsB">DPS 0</span></div>'
@@ -2523,18 +2570,22 @@
     else setSkill('skHistory', 'ready', '就绪', '✓', 1);
 
     // ---- v3.0 摇摆鸭状态条 ----
-    const perD = CFG.duck.hitsPerRound;
-    const inRound = duck.hits % perD;
+    const needD = duckNeed();
+    const rHits = Math.floor(duck.roundHits);
     const chip = document.getElementById('duckChip');
     if (chip) {
       const joined = !!duck.join;
       chip.classList.toggle('joined', joined);
-      document.getElementById('duckName').textContent =
-        joined ? '摇摆鸭 · ' + SIDE_NAME[duck.join] + '阵营' : '摇摆鸭 · 中立';
-      document.getElementById('duckState').textContent = joined
-        ? '撞击 ' + duck.hits + ' 次 · 再 ' + (perD - inRound) + ' 次重新结算'
-        : '撞击 ' + inRound + ' / ' + perD + ' · 第 ' + perD + ' 击者的对手获益';
-      document.getElementById('duckProg').style.width = Math.round((inRound / perD) * 100) + '%';
+      // 中立：牌子在场地正中；加入阵营：牌子隐藏，头像挂到那一侧的卡片上
+      chip.classList.toggle('hide', joined);
+      document.getElementById('duckName').textContent = '摇摆鸭 · 中立';
+      document.getElementById('duckState').textContent =
+        '累计 ' + duck.hits + ' 击 · 本轮 ' + rHits + '/' + needD;
+      document.getElementById('duckProg').style.width = Math.round((duck.roundHits / needD) * 100) + '%';
+      const bA = document.getElementById('duckBadgeA');
+      const bB = document.getElementById('duckBadgeB');
+      if (bA) bA.classList.toggle('on', joined && duck.join === 'left');
+      if (bB) bB.classList.toggle('on', joined && duck.join === 'right');
     }
 
     if (detailOn) updateDetail();
@@ -2601,7 +2652,7 @@
 
 
   // ==========================================================================
-  //  ⑫.5  v3.0 摇摆鸭 · 增益结算弹窗（B 站登录风改造）/ 策划面板
+  //  ⑫.5  v3.1 摇摆鸭 · 增益结算弹窗（B 站登录框 1:1）/ 策划面板
   // ==========================================================================
   const duckUI = {
     hp: CFG.duck.buff.hpDefault,
@@ -2610,31 +2661,25 @@
   const bili = { open: false, target: null };
   const biliEl = id => document.getElementById(id);
 
-  function updateBiliPreview() {
-    const t = bili.target || slime;
-    const baseM = t.cfg.maxHp, baseA = t.cfg.atk;
-    const newM = Math.round(baseM * (1 + duckUI.hp));
-    const newA = Math.round(baseA * (1 + duckUI.atk));
-    biliEl('valHp').textContent = '+' + Math.round(duckUI.hp * 100) + '%';
-    biliEl('valAtk').textContent = '+' + Math.round(duckUI.atk * 100) + '%';
-    biliEl('biliPreview').innerHTML =
-      '生命 <b>' + fmt(baseM) + '</b> → <b>' + fmt(newM) + '</b>'
-      + ' <span class="plus">(+' + fmt(newM - baseM) + ')</span><br>'
-      + '攻击 <b>' + fmt(baseA) + '</b> → <b>' + fmt(newA) + '</b>'
-      + ' <span class="plus">(+' + fmt(newA - baseA) + ')</span>';
+  // 弹窗是固定 1010×600 的设计稿，屏幕不够就整卡等比缩放，保证版式一模一样
+  function biliScale() {
+    const s = Math.min((window.innerWidth - 32) / 1010, (window.innerHeight - 32) / 600, 1);
+    document.documentElement.style.setProperty('--bs', Math.max(0.35, s).toFixed(3));
+  }
+
+  // 滑块左侧已填充的蓝色进度
+  function syncRangeFill(el) {
+    const min = +el.min || 0, max = +el.max || 100, v = +el.value;
+    el.style.setProperty('--p', (((v - min) / (max - min)) * 100).toFixed(1) + '%');
   }
 
   function refreshBiliInfo() {
     const t = bili.target || slime;
-    const per = CFG.duck.hitsPerRound;
+    const need = duckNeed();
     biliEl('tgName').textContent = SIDE_NAME[t.side];
-    biliEl('tgHp').textContent = fmt(t.maxHp) + ' / 基础 ' + fmt(t.cfg.maxHp);
-    biliEl('tgAtk').textContent = fmt(t.atk) + ' / 基础 ' + fmt(t.cfg.atk);
-    biliEl('tgHits').textContent = duck.hits + ' 次（本轮 ' + (duck.hits % per) + ' / ' + per + '）';
-    biliEl('tgPrev').textContent = buff.round > 0
-      ? '第 ' + buff.round + ' 次 · 生命 +' + Math.round(buff.hp * 100) + '% 攻击 +' + Math.round(buff.atk * 100) + '%'
-      : '—';
-    biliEl('tgNext').textContent = '再撞 ' + (per - duck.hits % per) + ' 次重新结算';
+    biliEl('tgStat').textContent = fmt(t.maxHp) + ' / ' + fmt(t.atk);
+    biliEl('tgHits').textContent = duck.hits + ' 次（本轮 ' + Math.floor(duck.roundHits) + ' / ' + need + '）';
+    biliEl('tgNext').textContent = '再撞 ' + Math.max(0, Math.ceil(need - duck.roundHits)) + ' 次';
   }
 
   function switchBiliPane(which) {
@@ -2650,18 +2695,20 @@
     bili.open = true;
     bili.target = target;
     const left = target.side === 'left';
-    biliEl('biliWhoImg').src = left ? IMG_SRC.a : IMG_SRC.b;
-    biliEl('biliWhoName').textContent = SIDE_NAME[target.side];
-    biliEl('biliRound').textContent = '第 ' + buff.round + ' 次结算';
     biliEl('soRabbit').classList.toggle('hot', left);
     biliEl('soSlime').classList.toggle('hot', !left);
     biliEl('soDuck').classList.remove('hot');
     biliEl('sldHp').value = String(Math.round(duckUI.hp * 100));
     biliEl('sldAtk').value = String(Math.round(duckUI.atk * 100));
+    biliEl('valHp').textContent = '+' + Math.round(duckUI.hp * 100) + '%';
+    biliEl('valAtk').textContent = '+' + Math.round(duckUI.atk * 100) + '%';
+    syncRangeFill(biliEl('sldHp'));
+    syncRangeFill(biliEl('sldAtk'));
     switchBiliPane('cfg');
-    updateBiliPreview();
     refreshBiliInfo();
+    biliScale();
     biliEl('biliMask').classList.add('show');
+    updateUI(1);              // 弹窗一打开就把侧栏刷成增益后的数值
   }
 
   function closeBili() {
@@ -2682,7 +2729,8 @@
     { k: '史莱姆 · 基础攻击', p: 'slime.atk', min: 1500, max: 6000, step: 50 },
     { k: '史莱姆 · 单球倍率 %', p: 'slime.spit.dmgAtkRatio', min: 30, max: 120, step: 1, pct: true },
     { k: '史莱姆 · 历史回血 %', p: 'slime.history.healRatio', min: 0, max: 80, step: 1, pct: true },
-    { k: '摇摆鸭 · 结算撞击数', p: 'duck.hitsPerRound', min: 5, max: 80, step: 1 },
+    { k: '摇摆鸭 · 首轮撞击数', p: 'duck.hitsPerRound', min: 5, max: 80, step: 1 },
+    { k: '摇摆鸭 · 每轮递增', p: 'duck.hitsPerStep', min: 0, max: 10, step: 1 },
     { k: '摇摆鸭 · 生命增益默认 %', p: 'duck.buff.hpDefault', min: 0, max: 40, step: 1, pct: true },
     { k: '摇摆鸭 · 攻击增益默认 %', p: 'duck.buff.atkDefault', min: 0, max: 30, step: 1, pct: true }
   ];
@@ -2696,6 +2744,9 @@
     let o = CFG;
     for (let i = 0; i < p.length - 1; i++) o = o[p[i]];
     o[p[p.length - 1]] = val;
+  }
+  function getPathFrom(root, path) {
+    return path.split('.').reduce(function (o, k) { return o[k]; }, root);
   }
 
   function buildDesigner() {
@@ -2732,23 +2783,17 @@
     showBanner('策划面板已应用');
   }
 
-  function restoreDesigner() {
-    DESIGNER_ROWS.forEach(function (r) {
-      setPath(r.p, getPathFrom(CFG0, r.p));
-    });
-    buildDesigner();
-  }
-  function getPathFrom(root, path) {
-    return path.split('.').reduce(function (o, k) { return o[k]; }, root);
-  }
-
   function initBili() {
     // 图片统一从 IMG_SRC 取，避免同一张 base64 在 HTML 里重复内联
     biliEl('duckChipImg').src = IMG_SRC.duck;
     biliEl('soRabbitImg').src = IMG_SRC.a;
     biliEl('soSlimeImg').src = IMG_SRC.b;
     biliEl('soDuckImg').src = IMG_SRC.duck;
-    biliEl('biliWhoImg').src = IMG_SRC.b;
+    biliEl('decoL').src = IMG_SRC.duck;
+    biliEl('decoR').src = IMG_SRC.a;
+    var bA = biliEl('duckBadgeImgA'), bB = biliEl('duckBadgeImgB');
+    if (bA) bA.src = IMG_SRC.duck;
+    if (bB) bB.src = IMG_SRC.duck;
 
     const sHp = biliEl('sldHp'), sAtk = biliEl('sldAtk');
     sHp.max = String(Math.round(CFG.duck.buff.hpMax * 100));
@@ -2756,13 +2801,19 @@
 
     sHp.addEventListener('input', function () {
       duckUI.hp = (+this.value) / 100;
+      biliEl('valHp').textContent = '+' + Math.round(duckUI.hp * 100) + '%';
+      syncRangeFill(this);
       if (bili.target) applyBuff(bili.target, duckUI.hp, duckUI.atk);
-      updateBiliPreview();
+      refreshBiliInfo();
+      updateUI(1);
     });
     sAtk.addEventListener('input', function () {
       duckUI.atk = (+this.value) / 100;
+      biliEl('valAtk').textContent = '+' + Math.round(duckUI.atk * 100) + '%';
+      syncRangeFill(this);
       if (bili.target) applyBuff(bili.target, duckUI.hp, duckUI.atk);
-      updateBiliPreview();
+      refreshBiliInfo();
+      updateUI(1);
     });
 
     biliEl('biliDefault').addEventListener('click', function () {
@@ -2770,8 +2821,12 @@
       duckUI.atk = CFG.duck.buff.atkDefault;
       sHp.value = String(Math.round(duckUI.hp * 100));
       sAtk.value = String(Math.round(duckUI.atk * 100));
+      biliEl('valHp').textContent = '+' + Math.round(duckUI.hp * 100) + '%';
+      biliEl('valAtk').textContent = '+' + Math.round(duckUI.atk * 100) + '%';
+      syncRangeFill(sHp); syncRangeFill(sAtk);
       if (bili.target) applyBuff(bili.target, duckUI.hp, duckUI.atk);
-      updateBiliPreview();
+      refreshBiliInfo();
+      updateUI(1);
     });
 
     biliEl('biliConfirm').addEventListener('click', function () {
@@ -2810,7 +2865,10 @@
       if (e.target === biliEl('designer')) biliEl('designer').classList.remove('show');
     });
 
-    biliEl('soDuck').classList.remove('hot');
+    biliEl('soDuck').classList.add('hot');
+    syncRangeFill(sHp); syncRangeFill(sAtk);
+    window.addEventListener('resize', biliScale);
+    biliScale();
   }
 
 
@@ -2947,7 +3005,9 @@
         blobs: blobs.length,
         duck: {
           hits: duck.hits,
-          inRound: duck.hits % CFG.duck.hitsPerRound,
+          roundHits: Math.floor(duck.roundHits),
+          need: duckNeed(),
+          inRound: Math.floor(duck.roundHits),
           join: duck.join,
           round: buff.round,
           buffHp: +buff.hp.toFixed(3),
