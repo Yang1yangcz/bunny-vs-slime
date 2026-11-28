@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>兔子 vs 史莱姆 vs 摇摆鸭 · 实时演算 v3.1</title>
+<title>兔子 vs 史莱姆 vs 摇摆鸭 · 实时演算 v3.1.1</title>
 <!--
   ============================================================================
-  兔子 vs 史莱姆 vs 摇摆鸭 · 实时演算 v3.1
+  兔子 vs 史莱姆 vs 摇摆鸭 · 实时演算 v3.1.1
   ----------------------------------------------------------------------------
   单文件，双击即可运行；所有图片以 base64 内联。
 
@@ -424,6 +424,7 @@
   .bili-deco{position:absolute;bottom:-22px;pointer-events:none;user-select:none;opacity:.92}
   .bili-deco-l{left:-14px;width:108px}
   .bili-deco-r{right:-10px;width:96px}
+  .bili-deco-r.slime{width:128px;right:-16px;bottom:-14px}
 
   .bili-close{
     position:absolute;right:14px;top:12px;z-index:5;width:36px;height:36px;padding:0;
@@ -614,7 +615,7 @@
           <div class="dt"><b id="duckName">摇摆鸭 · 中立</b><span id="duckState">撞击 0 / 20</span></div>
           <div class="dp"><i id="duckProg"></i></div>
         </div>
-        <div class="ver-chip">v3.1</div>
+        <div class="ver-chip">v3.1.1</div>
         <div class="banner" id="banner"></div>
         <div class="overlay" id="overlay">
           <div class="ko" id="koText">K.O.</div>
@@ -2695,6 +2696,10 @@
     bili.open = true;
     bili.target = target;
     const left = target.side === 'left';
+    // 右下角立绘跟着增益对象走：增益兔子就放兔子，增益史莱姆就放史莱姆
+    const deco = biliEl('decoR');
+    deco.src = left ? IMG_SRC.a : IMG_SRC.b;
+    deco.classList.toggle('slime', !left);
     biliEl('soRabbit').classList.toggle('hot', left);
     biliEl('soSlime').classList.toggle('hot', !left);
     biliEl('soDuck').classList.remove('hot');
