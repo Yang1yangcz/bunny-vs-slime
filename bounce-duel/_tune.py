@@ -69,6 +69,8 @@ def main():
         drv.eval(SEED_JS)
         # 暂停页面自带的实时主循环，否则它会和 __sim.advance 叠加，结果不可复现
         drv.eval('__sim.pause()')
+        # v3.0：批量跑的时候不弹增益窗，直接按滑块默认值结算
+        drv.eval('__sim.setAuto(true)')
         time.sleep(0.2)
 
         for path, val in overrides:
@@ -92,10 +94,12 @@ def main():
                     break
             rows.append(st)
             d, h = st['dealt'], st.get('hits', [0, 0])
-            print('  #%-2d %-6s %5.1fs hp=%-13s ult=%d 回血=%-5s | 兔输出%-6d(命中%d) 史输出%-6d(命中%d)'
+            dk = st.get('duck') or {}
+            print('  #%-2d %-6s %5.1fs hp=%-13s ult=%d 回血=%-5s | 鸭撞%-3d 增益%s | 兔输出%-6d 史输出%-6d'
                   % (i + 1, st['over'] or 'TIMEOUT', st['clock'], st['hp'],
                      st.get('ultCount', -1), st.get('healed', [0, 0])[0],
-                     d[0], h[0], d[1], h[1]))
+                     dk.get('hits', 0), dk.get('buffed') or '—',
+                     d[0], d[1]))
 
         a = sum(1 for r in rows if r['over'] == 'rabbit')
         b = sum(1 for r in rows if r['over'] == 'slime')
@@ -105,6 +109,40 @@ def main():
         print('\n结果: 兔子 %d : 史莱姆 %d%s  平均 %.1fs  大招平均 %.2f 次'
               % (a, b, '' if not to else '  超时 %d' % to,
                  sum(dur) / len(dur) if dur else 0, sum(ults) / len(ults)))
+
+        # ---- v3.0 摇摆鸭：被增益方胜率 / 触发统计 ----
+        dh = [r.get('duck', {}).get('hits', 0) for r in rows]
+        trig = [r for r in rows if (r.get('duck', {}).get('round', 0) or 0) > 0]
+        won = 0
+        for r in trig:
+            side = r['duck'].get('buffed')
+            if side and r['over'] == ('rabbit' if side == 'left' else 'slime'):
+                won += 1
+        first = [r['duck'].get('firstAt') for r in rows if r.get('duck', {}).get('firstAt')]
+        print('摇摆鸭: 平均撞击 %.1f 次，%d/%d 局触发过增益，被增益方赢 %d 局（%.0f%%），首次触发中位 %.1fs'
+              % (sum(dh) / len(dh), len(trig), len(rows), won,
+                 (won / len(trig) * 100) if trig else 0,
+                 sorted(first)[len(first) // 2] if first else -1))
+
+        rem, lose_rem = [], []
+        for r in trig:
+            side = r['duck'].get('buffed')
+            if not side:
+                continue
+            win_side = r['over']
+            idx = 0 if side == 'left' else 1
+            ratio = r['hp'][idx] / max(1, r['maxHp'][idx])
+            if win_side == ('rabbit' if side == 'left' else 'slime'):
+                rem.append(ratio)
+            else:
+                lose_rem.append(ratio)
+        nl = sum(1 for r in trig if r['duck'].get('buffed') == 'left')
+        nr = sum(1 for r in trig if r['duck'].get('buffed') == 'right')
+        print('        增益归属: 兔子 %d 次 / 史莱姆 %d 次' % (nl, nr))
+        if rem:
+            print('        被增益方获胜时剩余生命 %.0f%%（险胜<25%% 占 %d/%d），落败时剩余 %.0f%%'
+                  % (sum(rem) / len(rem) * 100, sum(1 for x in rem if x < 0.25), len(rem),
+                     (sum(lose_rem) / len(lose_rem) * 100) if lose_rem else 0))
     finally:
         p.terminate()
         time.sleep(0.4)

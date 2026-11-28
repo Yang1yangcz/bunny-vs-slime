@@ -24,3 +24,15 @@ Thumbs.db
 .vscode/
 bounce-duel/_vp_prof*/
 bounce-duel/_tune_prof_*/
+
+# 私人对话 / 工作区数据：绝不提交
+.workbuddy/
+
+# 自检与截图用的临时浏览器 profile
+bounce-duel/_check_prof*/
+bounce-duel/_chk_v3_prof*/
+bounce-duel/_shots_prof*/
+bounce-duel/_meas_prof*/
+bounce-duel/_qr_prof*/
+bounce-duel/_*_prof*/
+bounce-duel/_*_prof_*/

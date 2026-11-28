@@ -13,6 +13,8 @@ ASSETS = {
     '__IMG_B__': ('art/b.png', 'png'),
     '__IMG_HAMMER__': ('props/hammer.png', 'png'),
     '__IMG_ICE__': ('assets/src/iceland.jpg', 'jpeg'),
+    '__IMG_DUCK__': ('art/duck.png', 'png'),      # v3.0 摇摆鸭
+    '__IMG_QR__': ('assets/src/qr.png', 'png'),   # v3.0 弹窗二维码（指向仓库）
 }
 
 src = io.open(TPL, encoding='utf-8').read()
