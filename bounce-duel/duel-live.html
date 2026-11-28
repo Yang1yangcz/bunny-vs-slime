@@ -304,12 +304,13 @@
   .sound-hint.hide{opacity:0}
 
   .banner{
-    position:absolute;left:50%;top:17%;transform:translateX(-50%);
+    position:absolute;left:50%;top:24%;transform:translateX(-50%);
     pointer-events:none;white-space:nowrap;
-    padding:5px 20px 7px;border-radius:12px;
+    max-width:92%;overflow:hidden;text-overflow:ellipsis;
+    padding:4px 18px 6px;border-radius:12px;
     background:rgba(6,30,46,.62);border:2px solid rgba(143,216,255,.5);
     box-shadow:0 4px 0 rgba(4,18,28,.55);
-    font-size:clamp(18px,2.4vw,28px);font-weight:900;color:#fff;letter-spacing:.06em;
+    font-size:clamp(15px,1.9vw,23px);font-weight:900;color:#fff;letter-spacing:.04em;
     text-shadow:0 2px 0 rgba(10,42,63,.8), 0 0 20px rgba(143,216,255,.75);
     opacity:0;transition:opacity .18s ease;
   }
@@ -365,14 +366,28 @@
 
   /* ---------- v3.0 摇摆鸭：状态条 / 版本角标 ---------- */
   .duck-chip{
-    position:absolute;left:50%;top:9px;transform:translateX(-50%);z-index:8;
+    position:absolute;left:50%;top:9px;z-index:8;
+    transform:translate(-50%,0);
     display:flex;align-items:center;gap:9px;padding:6px 14px 6px 8px;
-    background:rgba(255,255,255,.93);border:2.5px solid var(--ink);border-radius:14px;
+    background:rgba(255,255,255,.94);border:2.5px solid var(--ink);border-radius:14px;
     box-shadow:0 3px 0 rgba(10,42,63,.75);
     max-width:min(430px,88%);
-    transition:opacity .18s ease, transform .18s ease;
+    transition:transform .46s cubic-bezier(.16,1,.3,1),
+               background-color .34s ease, border-color .34s ease, box-shadow .34s ease;
   }
-  .duck-chip.hide{display:none}
+  /* 加入阵营：整块贴着那一侧滑过去，主题色跟着换 */
+  .duck-chip.theme-l{
+    border-color:#ff5a3c;background:rgba(255,247,245,.96);
+    box-shadow:0 3px 0 rgba(10,42,63,.75), 0 0 16px rgba(255,90,60,.35);
+  }
+  .duck-chip.theme-r{
+    border-color:#2f9e3f;background:rgba(246,255,247,.96);
+    box-shadow:0 3px 0 rgba(10,42,63,.75), 0 0 16px rgba(47,158,63,.35);
+  }
+  .duck-chip.theme-l .dt b{color:#e0381c}
+  .duck-chip.theme-r .dt b{color:#1f7d36}
+  .duck-chip.theme-l .dp i{background:linear-gradient(90deg,#ffb3a2,#ff5a3c)}
+  .duck-chip.theme-r .dp i{background:linear-gradient(90deg,#a8e6a8,#2f9e3f)}
 
   /* 加入阵营后：鸭子头像出现在那一侧的卡片上 */
   .card-top .duck-badge{
@@ -397,7 +412,7 @@
   .duck-chip .dt b em{font-style:normal;font-weight:900}
 
   .ver-chip{
-    position:absolute;right:10px;top:10px;z-index:8;
+    position:absolute;right:10px;bottom:9px;z-index:8;
     font-size:11px;font-weight:900;letter-spacing:.06em;color:#fff;
     background:rgba(10,42,63,.78);border-radius:20px;padding:3px 10px;
     pointer-events:none;
@@ -406,19 +421,52 @@
 
   /* ---------- 增益弹窗：1:1 复刻 B 站登录框（v3.1） ---------- */
   .bili-mask{
-    position:fixed;inset:0;z-index:200;display:none;
-    align-items:center;justify-content:center;
+    position:fixed;inset:0;z-index:200;
+    display:flex;align-items:center;justify-content:center;
     background:rgba(0,0,0,.55);
     font-family:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",ui-sans-serif,sans-serif;
     color:#18191c;
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .24s ease-out, visibility 0s linear .24s;
   }
-  .bili-mask.show{display:flex}
+  .bili-mask.show{
+    opacity:1;visibility:visible;pointer-events:auto;
+    transition:opacity .24s ease-out, visibility 0s;
+  }
+  .bili-mask.closing{opacity:0;pointer-events:none;transition:opacity .18s ease-in}
+
+  .bili-scaler{transform:scale(var(--bs,1));transform-origin:center center;will-change:transform}
   .bili-card{
     position:relative;width:1010px;height:600px;flex:none;
     background:#fff;border-radius:8px;overflow:hidden;
     box-shadow:0 12px 48px rgba(0,0,0,.3);
-    transform:scale(var(--bs,1));transform-origin:center center;
   }
+  /* 卡片：0.92 缩放 + 下坠 26px 弹入（cubic-bezier(.16,1,.3,1) 有轻微过冲） */
+  .bili-mask.show .bili-card{animation:biliEnter .34s cubic-bezier(.16,1,.3,1) both}
+  .bili-mask.closing .bili-card{animation:biliOut .18s ease-in both}
+  @keyframes biliEnter{
+    0%{opacity:0;transform:scale(.92) translateY(26px)}
+    70%{opacity:1;transform:scale(1.006) translateY(-2px)}
+    100%{opacity:1;transform:scale(1) translateY(0)}
+  }
+  @keyframes biliOut{
+    from{opacity:1;transform:scale(1) translateY(0)}
+    to{opacity:0;transform:scale(.97) translateY(10px)}
+  }
+  /* 内容错层：每个区块晚 40~50ms 上来 */
+  .bili-mask.show .bili-left,
+  .bili-mask.show .bili-tabs,
+  .bili-mask.show .bili-pane.on,
+  .bili-mask.show .bili-social,
+  .bili-mask.show .bili-legal,
+  .bili-mask.show .bili-close,
+  .bili-mask.show .bili-designer{animation:biliUp .42s cubic-bezier(.16,1,.3,1) both}
+  .bili-mask.show .bili-left{animation-delay:.05s}
+  .bili-mask.show .bili-tabs{animation-delay:.10s}
+  .bili-mask.show .bili-pane.on{animation-delay:.15s}
+  .bili-mask.show .bili-social{animation-delay:.20s}
+  .bili-mask.show .bili-legal{animation-delay:.24s}
+  @keyframes biliUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
   .bili-mask *{box-sizing:border-box}
 
   .bili-deco{position:absolute;bottom:-22px;pointer-events:none;user-select:none;opacity:.92}
@@ -643,6 +691,7 @@
      v3.1 摇摆鸭 · 增益结算弹窗（1:1 复刻 B 站登录框，只换元素）
      ========================================================================== -->
 <div class="bili-mask" id="biliMask">
+  <div class="bili-scaler">
   <div class="bili-card">
     <img class="bili-deco bili-deco-l" id="decoL" alt="">
     <img class="bili-deco bili-deco-r" id="decoR" alt="">
@@ -711,6 +760,7 @@
       摇摆鸭每结算一次，所需撞击数 +2；上一轮增益会在下次结算时被清空<br>
       确认修改即代表你同意 <b>增益规则</b> 和 <b>结算协议</b>
     </div>
+  </div>
   </div>
 </div>
 
@@ -1048,6 +1098,12 @@
   function sfxDuck(kind) {
     if (!SFX.ctx) return;
     const t = SFX.ctx.currentTime;
+    if (kind === 'ice') {
+      tone('triangle', 1400, 760, t, 0.16, 0.07);
+      tone('sine', 2100, 1300, t + 0.02, 0.2, 0.045);
+      burst(t, 0.22, 'highpass', 3800, 7000, 0.8, 0.05);
+      return;
+    }
     const base = kind === 'hammer' ? 560 : kind === 'blob' ? 880 : 720;
     tone('square', base, base * 1.9, t, 0.07, 0.05);
     tone('sine', base * 1.5, base * 1.05, t + 0.02, 0.13, 0.07);
@@ -1062,6 +1118,26 @@
       tone('sine', f / 2, f / 2, t + i * 0.07, 0.4, 0.05);
     });
     burst(t, 0.5, 'highpass', 4000, 9000, 0.7, 0.07);
+  }
+
+  // 增益弹窗：气声上扬 + 五度滑音 + 两声铃
+  function sfxModalIn() {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    burst(t, 0.38, 'bandpass', 240, 3400, 1.1, 0.085);
+    tone('sine', 392, 587.33, t + 0.02, 0.32, 0.10);
+    tone('triangle', 1046.5, 1046.5, t + 0.15, 0.50, 0.045);
+    tone('triangle', 1567.98, 1567.98, t + 0.22, 0.45, 0.028);
+    tone('sine', 118, 52, t, 0.30, 0.20);
+  }
+
+  // 关闭：短促的下行
+  function sfxModalOut() {
+    if (!SFX.ctx) return;
+    const t = SFX.ctx.currentTime;
+    burst(t, 0.18, 'bandpass', 2200, 520, 1.0, 0.06);
+    tone('sine', 587.33, 392, t, 0.20, 0.07);
+    tone('sine', 96, 60, t, 0.18, 0.10);
   }
 
   // ==========================================================================
@@ -1403,6 +1479,8 @@
             }
             // 眩晕只上第一次
             if (i === 0 && slime.hp > 0) slime.stun = Math.max(slime.stun, U.stun);
+            // 冰岛冲击是范围技：第 1 段顺手把摇摆鸭也扫一下（一次大招只计 1 击）
+            if (i === 0) iceOnDuck();
           }
         });
       }
@@ -1764,7 +1842,7 @@
     duck.join = target.side;
 
     const name = SIDE_NAME[target.side];
-    showBanner('摇摆鸭加入 ' + name + ' 阵营 · 生命 +' + Math.round(duckUI.hp * 100) + '% 攻击 +' + Math.round(duckUI.atk * 100) + '%');
+    showBanner('摇摆鸭加入' + name + ' · +' + Math.round(duckUI.hp * 100) + '%/' + Math.round(duckUI.atk * 100) + '%');
     say('摇摆鸭加入' + name + '阵营', true);
     sfxJoin();
 
@@ -1833,6 +1911,24 @@
       keepSpeed(duck);
     }
     duckHit(f, 'bump');
+  }
+
+  // 冰岛冲击扫到鸭子：击飞 + 冰屑 + 计一次撞击
+  function iceOnDuck() {
+    const dx = duck.x - rabbit.x, dy = duck.y - rabbit.y, dd = Math.hypot(dx, dy) || 1;
+    duck.vx = dx / dd * 400;
+    duck.vy = dy / dd * 400;
+    duck.sp = 400;
+    duck.sqV += 7.5;
+    duckHit(rabbit, 'ice');
+    for (let k = 0; k < 8; k++) {
+      const a = Math.PI * 2 * k / 8 + Math.random() * 0.4, r0 = rand(30, 70);
+      fx.shards.push({
+        x: duck.x + Math.cos(a) * r0, y: duck.y + Math.sin(a) * r0,
+        tx: duck.x, ty: duck.y, t: 0, dur: rand(0.25, 0.45), color: '#cdefff'
+      });
+    }
+    fx.rings.push({ x: duck.x, y: duck.y, t: 0, dur: 0.5, r0: 10, r1: 96, color: '#b9ecff', w: 3 });
   }
 
   // 锤子打中鸭子：击飞 + 计一次撞击
@@ -2577,12 +2673,14 @@
     if (chip) {
       const joined = !!duck.join;
       chip.classList.toggle('joined', joined);
-      // 中立：牌子在场地正中；加入阵营：牌子隐藏，头像挂到那一侧的卡片上
-      chip.classList.toggle('hide', joined);
-      document.getElementById('duckName').textContent = '摇摆鸭 · 中立';
-      document.getElementById('duckState').textContent =
-        '累计 ' + duck.hits + ' 击 · 本轮 ' + rHits + '/' + needD;
+      // 中立居中；加入阵营则整块滑到那一侧并换主题色
+      document.getElementById('duckName').textContent =
+        '摇摆鸭 · ' + (joined ? SIDE_NAME[duck.join] + '阵营' : '中立');
+      document.getElementById('duckState').textContent = joined
+        ? '累计 ' + duck.hits + ' 击 · 加成 +' + Math.round(buff.hp * 100) + '%/' + Math.round(buff.atk * 100) + '%'
+        : '累计 ' + duck.hits + ' 击 · 本轮 ' + rHits + '/' + needD;
       document.getElementById('duckProg').style.width = Math.round((duck.roundHits / needD) * 100) + '%';
+      dockDuckChip();
       const bA = document.getElementById('duckBadgeA');
       const bB = document.getElementById('duckBadgeB');
       if (bA) bA.classList.toggle('on', joined && duck.join === 'left');
@@ -2712,16 +2810,26 @@
     switchBiliPane('cfg');
     refreshBiliInfo();
     biliScale();
-    biliEl('biliMask').classList.add('show');
+    const mask = biliEl('biliMask');
+    mask.classList.remove('show', 'closing');
+    void mask.offsetWidth;    // 强制重排，连开两次也能重播入场动画
+    mask.classList.add('show');
+    sfxModalIn();
     updateUI(1);              // 弹窗一打开就把侧栏刷成增益后的数值
   }
 
-  function closeBili() {
+  let biliTimer = 0;
+  function closeBili(instant) {
     bili.open = false;
-    const m = document.getElementById('biliMask');
-    if (m) m.classList.remove('show');
     const d = document.getElementById('designer');
     if (d) d.classList.remove('show');
+    const m = document.getElementById('biliMask');
+    if (!m) return;
+    clearTimeout(biliTimer);
+    if (instant) { m.classList.remove('show', 'closing'); return; }
+    m.classList.add('closing');
+    sfxModalOut();
+    biliTimer = setTimeout(function () { m.classList.remove('show', 'closing'); }, 180);
   }
 
   // ---- 策划面板 ----
@@ -2876,6 +2984,21 @@
     biliScale();
   }
 
+
+  // 状态条停靠：中立居中，加入兔子贴左，加入史莱姆贴右（带过渡）
+  let chipSide = 'none';
+  function dockDuckChip() {
+    const chip = document.getElementById('duckChip');
+    if (!chip) return;
+    const side = duck.join || 'none';
+    const w = stage.clientWidth || 1;
+    const half = Math.max(0, w / 2 - chip.offsetWidth / 2 - 10);
+    const dx = side === 'left' ? -half : side === 'right' ? half : 0;
+    chip.classList.toggle('theme-l', side === 'left');
+    chip.classList.toggle('theme-r', side === 'right');
+    chip.style.transform = 'translate(calc(-50% + ' + dx.toFixed(1) + 'px), 0)';
+    chipSide = side;
+  }
 
   // ==========================================================================
   //  ⑬  横幅 / 结算 / 交互

@@ -93,11 +93,20 @@ def main():
         time.sleep(0.45)
         shot(drv, 'v3-buffed.png')
 
-        # 3) 增益弹窗（B 站登录风）
+        # 3) 增益弹窗（B 站登录风）—— 先等冰岛背景退掉，避免整页发暗
+        drv.eval('__sim.pause()')
+        for _ in range(10):
+            st = json.loads(drv.eval('JSON.stringify(__sim.state())'))
+            if st['iceT'] <= 0 or st['over']:
+                break
+            drv.eval('__sim.advance(1.0, true)')
+        # 让主循环跑一帧，把冰岛背景 / 全屏暗色的 DOM 状态刷新掉
+        drv.eval('__sim.resume()')
+        time.sleep(0.35)
         drv.eval('__sim.pause()')
         drv.eval('__sim.setAuto(false)')
         drv.eval("__sim.settle('rabbit')")
-        time.sleep(0.45)
+        time.sleep(1.1)          # 等入场动画 + 错层动画播完
         shot(drv, 'v3-buff-modal.png')
 
         # 4) 策划面板
